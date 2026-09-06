@@ -1,0 +1,31 @@
+Run manifest
+
+Setup
+link: Downlink
+method: Benchmark RZF
+scenario: payload
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\downlink_dispersion_heavy.yaml
+config_hash: eddf67865b8e
+test_seeds: [991]
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Downlink\payload_completion\benchmark_rzf\benchmark_rzf_testset1__dispersion_heavy__heddf67865b8e
+Files recorded: 4
+Result artifacts: 2
+Plots: 0
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 2
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt

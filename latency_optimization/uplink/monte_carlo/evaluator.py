@@ -5,27 +5,26 @@ from typing import Any, Sequence
 import numpy as np
 import torch
 
+from latency_optimization.core.blocklength import build_monte_carlo_n_search_config, run_n_frontier_search
+from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
+from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
 
-from .network_operations import (
-    STREAMING_MODE,
-    PAYLOAD_MODE,
-    UplinkSystem,
-    _build_monte_carlo_test_search_cfg,
-    _build_precoder_net_snapshot_for_active_mask,
-    _compute_r_fbl_np,
-    _zero_uplink_precoder,
+from ..precoder_models import infer_precoder_numpy_with_blocklength_and_sigma
+from ..simulation import (
     apply_training_solution,
-    build_experiment_scenario,
-    build_uplink_rate_covariance,
     clone_nested_arrays,
     collect_uplink_interference_diagnostics,
     ensure_blocks_up_to,
-    format_log_line,
-    infer_precoder_numpy_with_blocklength_and_sigma,
-    run_n_frontier_search,
-    shared_estimate_initial_random_precoder_schedule_for_scenario,
-    uses_uplink_interference,
+    estimate_initial_random_precoder_schedule_for_scenario as shared_estimate_initial_random_precoder_schedule_for_scenario,
+)
+from ..system import UplinkSystem
+from ..uplink_rate_model import build_uplink_rate_covariance, uses_uplink_interference
+
+from .network_operations import (
+    _build_precoder_net_snapshot_for_active_mask,
+    _compute_r_fbl_np,
+    _zero_uplink_precoder,
 )
 from .rollout import (
     _count_uplink_forward_call,
@@ -528,10 +527,11 @@ def evaluate_blocklength_precoder_net(
                     )
                 )
             else:
-                search_cfg = _build_monte_carlo_test_search_cfg(
+                search_cfg = build_monte_carlo_n_search_config(
                     sim_cfg,
                     n_min=int(n_kl_min),
                     n_max=int(T_ref),
+                    phase="testing",
                 )
 
                 def _evaluate_payload_eval_candidate(candidate_n: int, stage_name: str) -> dict[str, Any]:

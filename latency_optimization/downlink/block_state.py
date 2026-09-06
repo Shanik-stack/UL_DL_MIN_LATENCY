@@ -31,6 +31,11 @@ def maximum_supported_bits(blocklength: int, rate: float) -> int:
     return int(np.floor(float(blocklength) * float(rate)))
 
 
+def make_zero_precoder(system: DownlinkSystem, user: int) -> np.ndarray:
+    user = int(user)
+    return np.zeros((int(system.Nb[user]), int(system.dk[user])), dtype=np.complex128)
+
+
 def ensure_precoder_block(
     system: DownlinkSystem,
     precoders: list[list[np.ndarray]],
@@ -61,10 +66,7 @@ def zero_precoder_block(
     block: int,
 ) -> None:
     user = int(user)
-    precoders[user][int(block)] = np.zeros(
-        (int(system.Nb[user]), int(system.dk[user])),
-        dtype=np.complex128,
-    )
+    precoders[user][int(block)] = make_zero_precoder(system, user)
 
 
 def channels_for_block(system: DownlinkSystem, block: int) -> list[np.ndarray]:

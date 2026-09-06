@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import copy
+from typing import Mapping
 
 import torch
 from torch import nn
 
 from latency_optimization.core.validation import require_choice
-from latency_optimization.optimization.stopping import objective_convergence_status
+from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
 from latency_optimization.precoders.parameters import complex_tensor_from_parameter
 from latency_optimization.precoders.power import cap_matrix_power_torch
 from latency_optimization.results.console import format_progress_log_line
@@ -40,7 +41,7 @@ def optimize_precoder_for_nl(
     dk: int,
     max_epochs: int,
     optimizer: torch.optim.Optimizer,
-    precoder_change_tolerance: float = 1e-5,
+    stopping_config: Mapping[str, object],
     print_every_epoch: int = 1,
     verbose: bool = True,
     log_context: dict[str, object] | None = None,
@@ -133,7 +134,9 @@ def optimize_precoder_for_nl(
             {
                 "epoch": float(epoch_index + 1),
                 "primal_residual": primal_residual,
+                "complementarity_residual": 0.0,
                 "precoder_change": precoder_change,
+                "stationarity_residual": precoder_change,
                 "rate_gap": float(rate_gap.detach().cpu()),
                 "power_gap": float(power_gap.detach().cpu()),
                 "rate_violation": float(rate_violation.detach().cpu()),
@@ -144,10 +147,11 @@ def optimize_precoder_for_nl(
         )
         previous_precoder = precoder.detach().clone()
 
-        epoch_status = objective_convergence_status(
-            precoder_change,
-            precoder_change_tolerance,
+        epoch_status = convergence_status_from_config(
+            stopping_config,
+            precoder_change=precoder_change,
             has_previous_state=epoch_index > 0,
+            residuals=KktResiduals(primal_residual, 0.0, precoder_change),
         )
         if verbose and (
             (epoch_index + 1) % print_every_epoch == 0
@@ -172,7 +176,7 @@ def optimize_precoder_for_nl(
         if objective_value < best_loss:
             best_loss = objective_value
             best_state = capture_state()
-        if epoch_status == "objective_stationary":
+        if epoch_status != "running":
             solve_status = epoch_status
             break
         if epoch_index + 1 < max_epochs:
@@ -203,5 +207,9 @@ def optimize_precoder_for_nl(
         "final_primal_residual": max(
             float(rate_violation.detach().cpu()),
             float(power_violation.detach().cpu()),
+        ),
+        "final_complementarity_residual": 0.0,
+        "final_stationarity_residual": float(
+            convergence_history[-1]["stationarity_residual"] if convergence_history else float("inf")
         ),
     }

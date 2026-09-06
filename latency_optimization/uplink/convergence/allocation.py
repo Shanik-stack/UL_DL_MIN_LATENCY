@@ -90,7 +90,6 @@ def optimize_user_blocklength_and_precoder(
     reduced_n_kl_log_interval = max(1, int(sim_cfg.get("reduced_n_kl_log_interval", 1)))
     
     lr_net = float(sim_cfg["lr_net"])
-    precoder_change_tolerance = float(sim_cfg["precoder_change_tolerance"])
 
     loss_fn = FiniteBlocklengthRateObjective(
         channel=H_kl,
@@ -128,7 +127,7 @@ def optimize_user_blocklength_and_precoder(
         Nt=Nt, dk=dk,
         max_epochs=max_epochs,
         optimizer=optimizer,
-        precoder_change_tolerance=precoder_change_tolerance,
+        stopping_config=sim_cfg,
         print_every_epoch=int(sim_cfg.get("print_every_epoch", 1)),
         verbose=True,
         log_context={"user": int(user), "block": int(block), "n_kl": int(n_kl_max)},
@@ -292,7 +291,7 @@ def optimize_user_blocklength_and_precoder(
                 dk=dk,
                 max_epochs=max_epochs,
                 optimizer=optimizer,
-                precoder_change_tolerance=precoder_change_tolerance,
+                stopping_config=sim_cfg,
                 print_every_epoch=int(sim_cfg.get("print_every_epoch", 1)),
                 verbose=True,
                 log_context={"user": int(user), "block": int(block), "n_kl": int(candidate_n)},

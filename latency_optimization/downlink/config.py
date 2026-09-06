@@ -10,9 +10,24 @@ from latency_optimization.experiments.configuration import (
     build_monte_carlo_sampling_settings,
     load_config_document,
 )
+from latency_optimization.optimization.stopping import CONVERGENCE_STOPPING_RULES
 from latency_optimization.physics.rate_law import resolve_rate_law
 
 from .precoders.models import validate_downlink_precoder_net_scope
+
+
+SHARED_BS_STREAMING_BLOCKLENGTH_INPUT_MODES = {
+    "joint_blocklength_vector",
+    "one_user_change_at_a_time",
+}
+
+
+def validate_shared_bs_streaming_blocklength_input_mode(mode: str) -> str:
+    return require_choice(
+        mode,
+        SHARED_BS_STREAMING_BLOCKLENGTH_INPUT_MODES,
+        "shared_bs_streaming_blocklength_input_mode",
+    )
 
 
 ALLOWED_SIMULATION_KEYS = {
@@ -24,6 +39,10 @@ ALLOWED_SIMULATION_KEYS = {
     "user_update_lr",
     "print_every_epoch",
     "precoder_change_tolerance",
+    "convergence_stopping_rule",
+    "kkt_primal_tolerance",
+    "kkt_complementarity_tolerance",
+    "kkt_stationarity_tolerance",
     "monte_carlo_train_seeds",
     "monte_carlo_num_training_channels",
     "monte_carlo_num_training_blocks",
@@ -141,6 +160,14 @@ def load_config(cfg_name: str) -> tuple[dict[str, Any], dict[str, Any], dict[str
         # The retained methods optimize the inverse-CNR rate objective only.
         # Rate and power feasibility remain allocation checks, not loss terms.
         "precoder_change_tolerance": float(sim_cfg_raw["precoder_change_tolerance"]),
+        "convergence_stopping_rule": require_choice(
+            sim_cfg_raw["convergence_stopping_rule"],
+            CONVERGENCE_STOPPING_RULES,
+            "convergence_stopping_rule",
+        ),
+        "kkt_primal_tolerance": float(sim_cfg_raw["kkt_primal_tolerance"]),
+        "kkt_complementarity_tolerance": float(sim_cfg_raw["kkt_complementarity_tolerance"]),
+        "kkt_stationarity_tolerance": float(sim_cfg_raw["kkt_stationarity_tolerance"]),
         "max_total_blocks": int(sim_cfg_raw.get("max_total_blocks", 256)),
         "n_kl_min": int(n_range.get("min", 5)),
         "n_kl_step": int(n_range.get("step", 1)),

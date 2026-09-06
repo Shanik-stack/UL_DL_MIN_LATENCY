@@ -1,0 +1,45 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Benchmark RZF
+scenario: payload
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\uplink_dispersion_heavy.yaml
+config_hash: 0859502b13f9
+seed: 991
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\payload_completion\benchmark_rzf\bm_rzf__dispersion_heavy__h0859502b13f9__s991
+Files recorded: 18
+Result artifacts: 16
+Plots: 12
+Empty directories removed: 1
+Zero-byte files: 0
+
+Files by section
+- testing: 16
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\convergence_results.json
+- testing\data\convergence_results.txt
+- testing\data\result.json
+- testing\data\summary.txt
+- testing\interference\interference_before_after_heatmaps.png
+- testing\interference\interference_heatmaps.png
+- testing\interference\per_user_interference_before_after.png
+- testing\interference\per_user_interference_profiles.png
+- testing\latency_asynchronality\benchmark_async_distribution.png
+- testing\latency_asynchronality\benchmark_final_async_heatmap.png
+- testing\latency_asynchronality\benchmark_initial_async_heatmap.png
+- testing\latency_asynchronality\benchmark_latency_comparison.png
+- testing\latency_asynchronality\benchmark_latency_histogram.png
+- testing\link_quality\benchmark_link_quality_comparison.png
+- testing\schedule_details\per_user_schedule_details.png
+- testing\user_config\user_config_summary.png

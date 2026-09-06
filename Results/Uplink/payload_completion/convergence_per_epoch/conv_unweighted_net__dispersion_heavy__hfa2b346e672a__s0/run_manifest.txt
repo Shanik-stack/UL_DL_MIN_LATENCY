@@ -4,16 +4,16 @@ Setup
 link: Uplink
 method: Convergence per epoch
 scenario: payload
-config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\uplink_dispersion_heavy.yaml
+config_path: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\configs\experiments\uplink_dispersion_heavy.yaml
 config_hash: fa2b346e672a
 seed: 0
-run_started_at_local: 2026-09-06T15:45:33+03:00
-run_completed_at_local: 2026-09-06T15:45:42+03:00
+run_started_at_local: 2026-09-06T15:32:18+03:00
+run_completed_at_local: 2026-09-06T15:32:30+03:00
 
 Artifact summary
 Status: complete
 Artifact health: complete
-Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\payload_completion\convergence_per_epoch\conv_unweighted_net__dispersion_heavy__hfa2b346e672a__s0
+Result root: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\Results\Uplink\payload_completion\convergence_per_epoch\conv_unweighted_net__dispersion_heavy__hfa2b346e672a__s0
 Files recorded: 43
 Result artifacts: 41
 Plots: 36

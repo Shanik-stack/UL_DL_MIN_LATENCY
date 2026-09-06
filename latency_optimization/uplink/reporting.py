@@ -6,77 +6,14 @@ import numpy as np
 
 from latency_optimization.core.scenarios import STREAMING_MODE
 from latency_optimization.experiments.cost import format_experiment_cost_lines
+from latency_optimization.results.metrics import (
+    format_optional_db as _format_optional_db,
+    mean_for_active_users as _mean_for_served_users,
+    pairwise_latency_differences as _pairwise_latency_diffs,
+    reference_latency_metrics as _compute_reference_latency_metrics,
+)
 
 from .simulation import collect_uplink_interference_diagnostics
-
-
-def _pairwise_latency_diffs(latencies: Sequence[float]) -> tuple[list[list[float]], list[dict[str, float]], float]:
-    arr = [float(x) for x in latencies]
-    K = len(arr)
-    matrix = [[abs(arr[i] - arr[j]) for j in range(K)] for i in range(K)]
-    pair_details: list[dict[str, float]] = []
-    async_sum = 0.0
-    for i in range(K):
-        for j in range(i + 1, K):
-            diff = float(matrix[i][j])
-            async_sum += diff
-            pair_details.append({"user_i": int(i), "user_j": int(j), "abs_latency_diff": diff})
-    return matrix, pair_details, float(async_sum)
-
-
-def _mean_for_served_users(values: Sequence[float], served_bits: Sequence[int]) -> float | None:
-    valid = [
-        float(value)
-        for value, bits in zip(values, served_bits)
-        if int(bits) > 0 and np.isfinite(float(value))
-    ]
-    return float(np.mean(valid)) if valid else None
-
-
-def _format_optional_db(label: str, value: object) -> str:
-    if value is None:
-        return f"{label}: n/a (no served blocks)"
-    return f"{label}: {float(value):.4f}"
-
-
-def _compute_reference_latency_metrics(
-    reference_latency: Sequence[float],
-    final_latency: Sequence[float],
-) -> dict[str, Any]:
-    ref_latency = [float(x) for x in reference_latency]
-    fin_latency = [float(x) for x in final_latency]
-    per_user_reduction: list[float] = []
-    for init_val, final_val in zip(ref_latency, fin_latency):
-        if init_val > 0:
-            reduction = ((init_val - final_val) / init_val) * 100.0
-        else:
-            reduction = 0.0
-        per_user_reduction.append(float(reduction))
-
-    initial_total_latency = float(sum(ref_latency))
-    final_total_latency = float(sum(fin_latency))
-    if initial_total_latency > 0:
-        total_latency_reduction_percent = ((initial_total_latency - final_total_latency) / initial_total_latency) * 100.0
-    else:
-        total_latency_reduction_percent = 0.0
-
-    _, _, initial_async_sum = _pairwise_latency_diffs(ref_latency)
-    _, _, final_async_sum = _pairwise_latency_diffs(fin_latency)
-    if initial_async_sum > 0:
-        async_reduction_percent = ((initial_async_sum - final_async_sum) / initial_async_sum) * 100.0
-    else:
-        async_reduction_percent = 0.0
-
-    return {
-        "initial_latency": ref_latency,
-        "initial_total_latency": initial_total_latency,
-        "initial_avg_latency": float(initial_total_latency / max(len(ref_latency), 1)),
-        "latency_reduction_per_user_percent": per_user_reduction,
-        "total_latency_reduction_percent": float(total_latency_reduction_percent),
-        "initial_asynchronality_sum": float(initial_async_sum),
-        "final_asynchronality_sum": float(final_async_sum),
-        "asynchronality_reduction_percent": float(async_reduction_percent),
-    }
 
 
 def _compute_dispersion_diagnostics(result: dict[str, Any]) -> dict[str, Any]:
@@ -650,10 +587,15 @@ def build_convergence_result(
         "final_interference_diag": final_interference_diag,
         "epoch_history": epoch_history,
         "kkt_solve_status_counts": kkt_status_counts,
+        "convergence_stopping_rule": (
+            str(sim_cfg.get("convergence_stopping_rule", "unknown"))
+            if sim_cfg is not None
+            else "unknown"
+        ),
         "kkt_tolerances": {
-            "primal": float(sim_cfg.get("kkt_primal_tol", np.nan)) if sim_cfg is not None else np.nan,
-            "complementarity": float(sim_cfg.get("kkt_complementarity_tol", np.nan)) if sim_cfg is not None else np.nan,
-            "stationarity": float(sim_cfg.get("kkt_stationarity_tol", np.nan)) if sim_cfg is not None else np.nan,
+            "primal": float(sim_cfg.get("kkt_primal_tolerance", np.nan)) if sim_cfg is not None else np.nan,
+            "complementarity": float(sim_cfg.get("kkt_complementarity_tolerance", np.nan)) if sim_cfg is not None else np.nan,
+            "stationarity": float(sim_cfg.get("kkt_stationarity_tolerance", np.nan)) if sim_cfg is not None else np.nan,
         },
         "uplink_rate_model": str(sim_cfg.get("uplink_rate_model", "unknown")) if sim_cfg is not None else "unknown",
         "uplink_objective_mode": str(sim_cfg.get("uplink_objective_mode", "unknown")) if sim_cfg is not None else "unknown",

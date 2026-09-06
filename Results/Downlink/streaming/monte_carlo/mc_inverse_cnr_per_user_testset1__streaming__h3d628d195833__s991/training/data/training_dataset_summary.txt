@@ -1,0 +1,14 @@
+Downlink training dataset summary
+Training sample unit: block
+Training sample kind: streaming_block
+Total training samples: 1
+Base dataset kind: streaming_block
+Training scenario modes: ['streaming']
+Training SNR ranges by user (dB): [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+Training samples by seed: {'990': 1}
+Training samples by user SNR (dB): [{'0': 1}, {'0': 1}, {'0': 1}]
+Training samples per user: [1, 1, 1]
+
+Terminology
+- payload channel episode: one seed-based payload rollout anchor; later blocks are generated online
+- streaming block sample: one independent seed-based block with a fresh per-block bit target

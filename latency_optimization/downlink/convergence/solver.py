@@ -9,8 +9,9 @@ import torch
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
 from latency_optimization.core.scenarios import STREAMING_MODE, build_experiment_scenario
 from latency_optimization.core.validation import require_choice
-from latency_optimization.optimization.stopping import KktResiduals, KktTolerances, classify_convergence
+from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
 from latency_optimization.precoders.power import joint_power_scale_torch
+from latency_optimization.precoders.model_state import clone_model_state
 from latency_optimization.precoders.parameters import (
     complex_parameter_from_numpy,
     complex_tensor_from_parameter,
@@ -58,10 +59,6 @@ def validate_convergence_precoder_update_mode(sim_params: dict[str, Any]) -> str
     )
 
 
-def _copy_model_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
-    return {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
-
-
 def _project_active_precoders_to_block_power(
     system: DownlinkSystem,
     precoders: dict[int, torch.Tensor],
@@ -78,13 +75,6 @@ def _project_active_precoders_to_block_power(
     if scale is None:
         return precoders
     return {int(k): (precoders[int(k)] * scale.to(precoders[int(k)].dtype)) for k in active_users}
-
-
-
-
-
-
-
 
 def _evaluate_block_objective(
     system: DownlinkSystem,
@@ -355,7 +345,7 @@ def _copy_active_model_optimizer_states(
     if len(user_models) == 0 or len(model_optimizers) == 0:
         return {}, {}
     model_states = {
-        int(k): _copy_model_state(user_models[int(k)])
+        int(k): clone_model_state(user_models[int(k)])
         for k in active_users
     }
     optimizer_states = {
@@ -762,9 +752,6 @@ def optimize_precoders_for_block(
     update_users = [int(k) for k in (active_users if shared_bs_scope else (users_to_update or active_users))]
     print_every = max(1, int(sim_params.get("print_every_epoch", 1)))
     max_epochs = max(1, int(max_epochs if max_epochs is not None else sim_params["max_epochs"]))
-    kkt_primal_tol = float(sim_params["kkt_primal_tol"])
-    kkt_complementarity_tol = float(sim_params["kkt_complementarity_tol"])
-    kkt_stationarity_tol = float(sim_params["kkt_stationarity_tol"])
     canonical_mode = validate_objective_mode(objective_mode)
     objective_label = INVERSE_CNR_WEIGHTED_SUM_RATE_PUBLIC_NAME
 
@@ -931,16 +918,16 @@ def optimize_precoders_for_block(
 
         best_feasible_found = best_feasible_found or exact_feasible
 
-        epoch_status = classify_convergence(
-            KktResiduals(r_p, r_c, r_s),
-            KktTolerances(kkt_primal_tol, kkt_complementarity_tol, kkt_stationarity_tol),
+        epoch_status = convergence_status_from_config(
+            sim_params,
+            precoder_change=r_s,
             has_previous_state=epoch_idx > 0,
-            constraints_enabled=False,
+            residuals=KktResiduals(r_p, r_c, r_s),
         )
         if epoch_status != "running":
             solve_status = epoch_status
 
-        if verbose and (((epoch_idx + 1) % print_every) == 0 or epoch_idx == 0 or solve_status == "objective_stationary"):
+        if verbose and (((epoch_idx + 1) % print_every) == 0 or epoch_idx == 0 or epoch_status != "running"):
             print(
                 format_progress_log_line(
                     "[DL Convergence]",
@@ -958,7 +945,7 @@ def optimize_precoders_for_block(
                 )
             )
 
-        if solve_status == "objective_stationary":
+        if epoch_status != "running":
             break
 
     restored_state = best_objective_state
@@ -980,4 +967,3 @@ def optimize_precoders_for_block(
         "solve_status": solve_status,
         "best_feasible_found": bool(best_feasible_found),
     }
-

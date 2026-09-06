@@ -27,6 +27,9 @@ from latency_optimization.results.naming import (
     join_tag_parts,
     make_method_result_tag,
 )
+from latency_optimization.results.metrics import (
+    pairwise_latency_differences as _pairwise_latency_diffs,
+)
 from latency_optimization.results.paths import build_uplink_convergence_result_dirs
 from latency_optimization.results.persistence import (
     current_local_timestamp,
@@ -101,28 +104,6 @@ def validate_catalog_detail_mode(value: str) -> str:
 
 def _channel_uses_to_seconds(channel_uses: float, fs_hz: float) -> float:
     return float(channel_uses) / max(float(fs_hz), 1.0e-12)
-
-
-def _pairwise_latency_diffs(latencies: list[float]) -> tuple[list[list[float]], list[dict[str, float]], float]:
-    arr = [float(x) for x in latencies]
-    K = len(arr)
-    matrix = [[abs(arr[i] - arr[j]) for j in range(K)] for i in range(K)]
-    pair_details: list[dict[str, float]] = []
-    async_sum = 0.0
-    for i in range(K):
-        for j in range(i + 1, K):
-            diff = abs(arr[i] - arr[j])
-            async_sum += diff
-            pair_details.append(
-                {
-                    "user_i": int(i),
-                    "user_j": int(j),
-                    "latency_user_i_seconds": float(arr[i]),
-                    "latency_user_j_seconds": float(arr[j]),
-                    "difference_seconds": float(diff),
-                }
-            )
-    return matrix, pair_details, float(async_sum)
 
 
 def _enrich_strategy_summary_with_seconds(strategy_summary: dict, fs_per_user: list[float]) -> dict:
@@ -266,9 +247,6 @@ def _build_exact_action_solver(
 ):
     lr_net = float(sim_cfg["lr_net"])
     max_epochs = max(1, int(sim_cfg["max_epochs"]))
-    kkt_primal_tol = float(sim_cfg["kkt_primal_tol"])
-    kkt_complementarity_tol = float(sim_cfg["kkt_complementarity_tol"])
-    kkt_stationarity_tol = float(sim_cfg["kkt_stationarity_tol"])
     cache: dict[tuple[int, int, int, int], dict] = {}
     frontier_cache: dict[tuple[int, int, int], dict[int, dict]] = {}
 
@@ -321,9 +299,7 @@ def _build_exact_action_solver(
                 dk=dk,
                 max_epochs=max_epochs,
                 optimizer=optimizer,
-                kkt_primal_tol=kkt_primal_tol,
-                kkt_complementarity_tol=kkt_complementarity_tol,
-                kkt_stationarity_tol=kkt_stationarity_tol,
+                stopping_config=sim_cfg,
                 print_every_epoch=max(1, int(sim_cfg.get("print_every_epoch", 1))),
                 verbose=not suppress_inner_logs,
                 log_context={

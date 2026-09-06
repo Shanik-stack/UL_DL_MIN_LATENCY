@@ -11,7 +11,7 @@ import numpy as np
 
 def make_serializable(obj: Any) -> Any:
     if isinstance(obj, dict):
-        return {key: make_serializable(value) for key, value in obj.items()}
+        return {str(key): make_serializable(value) for key, value in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [make_serializable(value) for value in obj]
     if isinstance(obj, np.ndarray):
@@ -22,6 +22,13 @@ def make_serializable(obj: Any) -> Any:
         return float(obj)
     if isinstance(obj, np.bool_):
         return bool(obj)
+    if hasattr(obj, "detach"):
+        return make_serializable(obj.detach().cpu().numpy())
+    if hasattr(obj, "item") and not isinstance(obj, (str, bytes, bool)):
+        try:
+            return make_serializable(obj.item())
+        except (TypeError, ValueError):
+            pass
     return obj
 
 

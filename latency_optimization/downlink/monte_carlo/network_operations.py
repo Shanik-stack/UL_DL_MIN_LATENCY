@@ -1,35 +1,21 @@
 from __future__ import annotations
 
-import copy
 from itertools import combinations
-from time import perf_counter
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 import torch
 
-from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import (
-    STREAMING_MODE,
-    PAYLOAD_MODE,
-    build_experiment_scenario,
-)
-from latency_optimization.core.validation import require_choice
-from latency_optimization.experiments.channels import build_training_snr_schedule, with_monte_carlo_sample_snr_by_user
-from latency_optimization.experiments.determinism import configure_determinism
 from latency_optimization.physics.finite_blocklength import finite_blocklength_mimo_torch
 from latency_optimization.precoders.power import joint_power_scale_torch
-from latency_optimization.results.console import format_log_line, format_latency_log_line, format_progress_log_line
+from latency_optimization.results.persistence import make_serializable
 from latency_optimization.runtime import DEVICE
 
-from ..block_state import channels_for_block
-from ..baselines import (
-    estimate_initial_latency_from_random_precoders_for_scenario as shared_estimate_initial_latency_from_random_precoders_for_scenario,
-)
+from ..block_state import channels_for_block, make_zero_precoder
+from ..config import validate_shared_bs_streaming_blocklength_input_mode
+from ..model_service import describe_precoder_parameterization
 from ..objective import (
     objective_display_name,
-    objective_weight_strategy_name,
-    validate_convergence_objective_mode,
     validate_convergence_priority_weight_strategy,
 )
 from ..precoders.checkpoints import (
@@ -39,7 +25,6 @@ from ..precoders.checkpoints import (
 from ..precoders.inference import (
     infer_raw_bs_precoders_numpy_with_blocklength,
     infer_raw_bs_precoders_torch_with_blocklength,
-    infer_raw_precoder_numpy_with_blocklength,
     infer_raw_precoder_torch_with_blocklength,
 )
 from ..precoders.models import (
@@ -50,150 +35,6 @@ from ..precoders.models import (
 )
 from ..system import DownlinkSystem
 from ..user_weights import normalized_inverse_cnr_weights
-
-SHARED_BS_STREAMING_BLOCKLENGTH_INPUT_MODES = {
-    "joint_blocklength_vector",
-    "one_user_change_at_a_time",
-}
-
-
-def _build_monte_carlo_training_search_cfg(
-    sim_params: dict[str, Any],
-    *,
-    n_min: int,
-    n_max: int,
-) -> dict[str, int | str]:
-    return build_n_search_config(
-        n_min=int(n_min),
-        n_max=int(n_max),
-        fine_step=int(sim_params["n_kl_step"]),
-        direction=sim_params.get("n_search_direction", "descending"),
-        strategy=sim_params.get("n_search_strategy", "fixed_step"),
-        coarse_step=sim_params.get("n_search_coarse_step", int(sim_params["n_kl_step"])),
-        exponential_factor=sim_params.get("n_search_exponential_factor", 2),
-        allow_only_fixed_step=True,
-    )
-
-
-def _build_monte_carlo_test_search_cfg(
-    sim_params: dict[str, Any],
-    *,
-    n_min: int,
-    n_max: int,
-) -> dict[str, int | str]:
-    return build_n_search_config(
-        n_min=int(n_min),
-        n_max=int(n_max),
-        fine_step=int(sim_params["n_kl_step"]),
-        direction=sim_params.get(
-            "monte_carlo_test_n_search_direction",
-            sim_params.get("n_search_direction", "descending"),
-        ),
-        strategy=sim_params.get(
-            "monte_carlo_test_n_search_strategy",
-            sim_params.get("n_search_strategy", "fixed_step"),
-        ),
-        coarse_step=sim_params.get(
-            "monte_carlo_test_n_search_coarse_step",
-            sim_params.get("n_search_coarse_step", int(sim_params["n_kl_step"])),
-        ),
-        exponential_factor=sim_params.get(
-            "monte_carlo_test_n_search_exponential_factor",
-            sim_params.get("n_search_exponential_factor", 2),
-        ),
-        allow_only_fixed_step=False,
-    )
-
-
-def _to_complex_numpy(x) -> np.ndarray:
-    if isinstance(x, np.ndarray):
-        return x.astype(np.complex64, copy=False)
-    if hasattr(x, "detach"):
-        return x.detach().cpu().numpy().astype(np.complex64, copy=False)
-    return np.asarray(x, dtype=np.complex64)
-
-
-def _clone_model_states(models: Sequence[torch.nn.Module]) -> list[dict[str, torch.Tensor]]:
-    return [
-        {
-            key: value.detach().cpu().clone()
-            for key, value in model.state_dict().items()
-        }
-        for model in models
-    ]
-
-
-def _restore_model_states(
-    models: Sequence[torch.nn.Module],
-    state_snapshots: Sequence[dict[str, torch.Tensor]],
-) -> None:
-    for model, model_state in zip(models, state_snapshots):
-        model.load_state_dict(model_state)
-
-
-def _relative_model_state_change(
-    models: Sequence[torch.nn.Module],
-    previous_states: Sequence[dict[str, torch.Tensor]] | None,
-) -> float:
-    if previous_states is None:
-        return float("inf")
-    delta_norm_sq = 0.0
-    reference_norm_sq = 0.0
-    for model, model_state in zip(models, previous_states):
-        current_state = model.state_dict()
-        for key, current_value in current_state.items():
-            current_cpu = current_value.detach().cpu()
-            previous_cpu = model_state[key]
-            delta_norm_sq += float(torch.sum((current_cpu - previous_cpu).pow(2)).item())
-            reference_norm_sq += float(torch.sum(previous_cpu.pow(2)).item())
-    delta_norm = float(np.sqrt(max(delta_norm_sq, 0.0)))
-    reference_norm = float(np.sqrt(max(reference_norm_sq, 0.0)))
-    return float(delta_norm / max(reference_norm, 1e-12))
-
-
-def _serialize_nested_history(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(key): _serialize_nested_history(val) for key, val in value.items()}
-    if isinstance(value, np.ndarray):
-        return _serialize_nested_history(value.tolist())
-    if isinstance(value, (list, tuple)):
-        return [_serialize_nested_history(v) for v in value]
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating,)):
-        return float(value)
-    if hasattr(value, "item") and not isinstance(value, (str, bytes, bool)):
-        try:
-            scalar = value.item()
-        except Exception:
-            return value
-        if isinstance(scalar, (int, float, str, bool)):
-            return scalar
-    return value
-
-
-def _zero_downlink_precoder(system: DownlinkSystem, user: int) -> np.ndarray:
-    k = int(user)
-    return np.zeros((int(system.Nb[k]), int(system.dk[k])), dtype=np.complex128)
-
-
-def _downlink_monte_carlo_precoder_parameterization(
-    model_scope: str,
-) -> str:
-    scope = validate_downlink_precoder_net_scope(model_scope)
-    if scope == "bs_shared_net":
-        return "bs_shared_block_context_to_full_precoder_mlp"
-    return "per_user_block_context_to_precoder_mlp"
-
-
-def validate_shared_bs_streaming_blocklength_input_mode(mode: str) -> str:
-    """Validate how a shared BS network receives the blocklength vector."""
-    return require_choice(
-        mode,
-        SHARED_BS_STREAMING_BLOCKLENGTH_INPUT_MODES,
-        "shared_bs_streaming_blocklength_input_mode",
-    )
-
 
 def _build_training_user_models(
     system_params: dict[str, Any],
@@ -289,10 +130,6 @@ def _compute_r_fbl_torch(
     ).rate
 
 
-def _zero_precoder(system: DownlinkSystem, user: int) -> np.ndarray:
-    return np.zeros((int(system.Nb[int(user)]), int(system.dk[int(user)])), dtype=np.complex128)
-
-
 def _shared_n_targets_for_block(
     system: DownlinkSystem,
     active_mask: Sequence[int | float],
@@ -368,7 +205,7 @@ def _masked_precoder_snapshot(
     active_mask: Sequence[int | float],
 ) -> list[list[np.ndarray]]:
     zero_overrides = {
-        int(k): _zero_precoder(system, int(k))
+        int(k): make_zero_precoder(system, int(k))
         for k in range(system.K)
         if int(block) < len(working_F[int(k)]) and float(active_mask[int(k)]) <= 0.5
     }
@@ -886,7 +723,7 @@ def build_precoder_net_artifact(
             list(map(float, row))
             for row in precoder_net_training_history.get("per_user_objective_loss", [])
         ],
-        "precoder_net_training_history": _serialize_nested_history(precoder_net_training_history),
+        "precoder_net_training_history": make_serializable(precoder_net_training_history),
         "user_model_specs": export_user_model_specs(
             system_params["Nr"],
             system_params["Nb"],
@@ -899,8 +736,10 @@ def build_precoder_net_artifact(
             model_scope=model_scope,
         ),
         "user_model_states": export_user_model_states(user_models),
-        "precoder_parameterization": _downlink_monte_carlo_precoder_parameterization(
+        "precoder_parameterization": describe_precoder_parameterization(
             model_scope,
+            "precoder_net",
+            uses_blocklength_input=True,
         ),
         "downlink_precoder_net_scope": str(model_scope),
         "shared_bs_streaming_blocklength_input_mode": (

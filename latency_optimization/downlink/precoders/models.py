@@ -109,7 +109,7 @@ class PerUserChannelMlp(nn.Module):
 
     def __init__(self, receive_antennas: int, transmit_antennas: int, streams: int):
         super().__init__()
-        self.output_nb = int(max_transmit_antennas)
+        self.output_nb = int(transmit_antennas)
         self.output_dk = int(streams)
         input_size = 2 * int(receive_antennas) * int(transmit_antennas)
         output_size = 2 * self.output_nb * self.output_dk

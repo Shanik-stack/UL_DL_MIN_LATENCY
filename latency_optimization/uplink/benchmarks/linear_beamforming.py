@@ -170,7 +170,6 @@ def _build_closed_form_experiment_cost(
         "inference_forward_calls": 0,
         "optimizer_steps": 0,
         "actual_optimizer_updates": 0,
-        "extra_gradient_evaluations": 0,
         "forward_only_beam_evaluations": int(beamformer_build_calls),
         "workload_counters": {
             "closed_form_beamformer_build_calls": int(beamformer_build_calls),

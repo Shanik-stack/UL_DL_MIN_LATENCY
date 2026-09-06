@@ -10,7 +10,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import TwoSlopeNorm
 from matplotlib.lines import Line2D
-from matplotlib.transforms import blended_transform_factory
+
+from latency_optimization.results.plotting import (
+    add_legend_if_present as _add_legend_if_present,
+    build_segmented_epoch_positions as _build_segmented_epoch_positions,
+    combined_finite_limits as _combined_finite_limits,
+    convergence_status_color as _kkt_status_color,
+    draw_epoch_segment_guides as _draw_epoch_segment_guides,
+    finite_histogram_bins as _finite_histogram_bins,
+    imshow_user_pair_matrix as _imshow_with_labels,
+    load_interference_diagnostics as _load_interference_diag,
+    mask_inactive_user_pairs as _mask_inactive_user_pairs,
+    safe_db as _safe_db,
+    segmented_epoch_ticks as _segmented_epoch_ticks,
+)
 
 from .system import DownlinkSystem
 
@@ -30,21 +43,6 @@ def initialize_output_dirs(base_dir: str) -> dict[str, str]:
     return dirs
 
 
-def _safe_db(values: np.ndarray | float) -> np.ndarray | float:
-    arr = np.asarray(values, dtype=float)
-    out = 10.0 * np.log10(np.maximum(arr, 1e-30))
-    if np.isscalar(values):
-        return float(out)
-    return out
-
-
-def _add_legend_if_present(ax, *, handles=None, labels=None, **kwargs) -> None:
-    if handles is None or labels is None:
-        handles, labels = ax.get_legend_handles_labels()
-    if handles and any(str(label).strip() for label in labels):
-        ax.legend(handles=handles, labels=labels, **kwargs)
-
-
 def _build_rate_violation_matrix(result: dict[str, Any]) -> np.ndarray:
     K = len(result.get("n_kl", []))
     max_blocks = max((len(v) for v in result.get("n_kl", [])), default=0)
@@ -54,23 +52,6 @@ def _build_rate_violation_matrix(result: dict[str, Any]) -> np.ndarray:
         block = int(point["block"])
         mat[user, block] = float(point["required_rate"]) - float(point["achieved_rate"])
     return mat
-
-
-def _load_interference_diag(payload: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not payload:
-        return None
-    return {
-        "blocks_per_user": [int(v) for v in payload.get("blocks_per_user", [])],
-        "signal": np.asarray(payload.get("signal", []), dtype=float),
-        "total_interference": np.asarray(payload.get("total_interference", []), dtype=float),
-        "noise": np.asarray(payload.get("noise", []), dtype=float),
-        "sinr_db": np.asarray(payload.get("sinr_db", []), dtype=float),
-        "pairwise_block": np.asarray(payload.get("pairwise_block", []), dtype=float),
-        "avg_pairwise_power": np.asarray(payload.get("avg_pairwise_power", []), dtype=float),
-        "avg_pairwise_inr_db": np.asarray(payload.get("avg_pairwise_inr_db", []), dtype=float),
-        "avg_pairwise_share": np.asarray(payload.get("avg_pairwise_share", []), dtype=float),
-        "worst_block": int(payload.get("worst_block", -1)),
-    }
 
 
 def _collect_final_interference_diagnostics(system: DownlinkSystem) -> dict[str, np.ndarray | int]:
@@ -147,172 +128,12 @@ def _collect_final_interference_diagnostics(system: DownlinkSystem) -> dict[str,
     }
 
 
-def _imshow_with_labels(
-    ax: plt.Axes,
-    matrix: np.ndarray,
-    title: str,
-    cbar_label: str,
-    cmap: str = "viridis",
-    center_zero: bool = False,
-    vmin: float | None = None,
-    vmax: float | None = None,
-) -> None:
-    mat = np.asarray(matrix, dtype=float)
-    ax.set_title(title)
-    ax.set_xlabel("Interferer user")
-    ax.set_ylabel("Victim user")
-    ax.set_xticks(np.arange(mat.shape[1]))
-    ax.set_yticks(np.arange(mat.shape[0]))
-    if not np.any(np.isfinite(mat)):
-        ax.text(0.5, 0.5, "No active user pair", ha="center", va="center", transform=ax.transAxes)
-        return
-    if center_zero:
-        finite = mat[np.isfinite(mat)]
-        if finite.size > 0:
-            bound = max(abs(float(np.nanmin(finite))), abs(float(np.nanmax(finite))), 1e-12)
-            norm = TwoSlopeNorm(vmin=-bound, vcenter=0.0, vmax=bound)
-        else:
-            norm = None
-    else:
-        norm = None
-    masked = np.ma.masked_invalid(mat)
-    if norm is None:
-        im = ax.imshow(masked, aspect="auto", interpolation="none", cmap=cmap, vmin=vmin, vmax=vmax)
-    else:
-        im = ax.imshow(masked, aspect="auto", interpolation="none", cmap=cmap, norm=norm)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=cbar_label)
-
-
-def _mask_inactive_user_pairs(matrix: np.ndarray, bits_by_user: object) -> np.ndarray:
-    mat = np.asarray(matrix, dtype=float)
-    active = np.asarray(
-        [sum(int(bits) for bits in user_bits) > 0 for user_bits in bits_by_user],
-        dtype=bool,
-    )
-    if active.size != mat.shape[0] or mat.shape[0] != mat.shape[1]:
-        return mat
-    return np.where(active[:, None] & active[None, :], mat, np.nan)
-
-
-def _combined_finite_limits(*matrices: np.ndarray) -> tuple[float | None, float | None]:
-    finite_parts: list[np.ndarray] = []
-    for matrix in matrices:
-        arr = np.asarray(matrix, dtype=float)
-        finite = arr[np.isfinite(arr)]
-        if finite.size > 0:
-            finite_parts.append(finite.reshape(-1))
-    if not finite_parts:
-        return None, None
-    stacked = np.concatenate(finite_parts)
-    return float(np.min(stacked)), float(np.max(stacked))
-
-
 def _epoch_history_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
     return list(result.get("epoch_history", []))
 
 
 def _row_epoch(row: dict[str, Any]) -> int:
     return int(row.get("epoch", 0))
-
-
-def _build_segmented_epoch_positions(
-    rows: list[dict[str, Any]],
-    *,
-    group_key: str,
-    gap: float = 1.5,
-) -> tuple[np.ndarray, list[dict[str, Any]]]:
-    if len(rows) == 0:
-        return np.asarray([], dtype=float), []
-
-    positions: list[float] = []
-    segments: list[dict[str, Any]] = []
-    cursor = 0.0
-    idx = 0
-    while idx < len(rows):
-        group_value = rows[idx].get(group_key)
-        segment_start = cursor + 1.0
-        local_epoch = 1
-        while idx < len(rows) and rows[idx].get(group_key) == group_value:
-            positions.append(cursor + float(local_epoch))
-            idx += 1
-            local_epoch += 1
-        segment_length = local_epoch - 1
-        segment_end = cursor + float(segment_length)
-        segments.append(
-            {
-                "group": group_value,
-                "start": float(segment_start),
-                "end": float(segment_end),
-                "length": int(segment_length),
-            }
-        )
-        cursor = segment_end + float(gap)
-    return np.asarray(positions, dtype=float), segments
-
-
-def _segmented_epoch_ticks(segments: list[dict[str, Any]], max_labels_per_segment: int = 4) -> tuple[list[float], list[str]]:
-    tick_positions: list[float] = []
-    tick_labels: list[str] = []
-    for segment in segments:
-        length = int(segment["length"])
-        if length <= 0:
-            continue
-        sample_count = min(max_labels_per_segment, length)
-        local_epochs = np.unique(np.linspace(1, length, sample_count, dtype=int))
-        for local_epoch in local_epochs:
-            tick_positions.append(float(segment["start"]) + float(local_epoch - 1))
-            tick_labels.append(str(int(local_epoch)))
-    return tick_positions, tick_labels
-
-
-def _draw_epoch_segment_guides(
-    ax: plt.Axes,
-    segments: list[dict[str, Any]],
-    *,
-    label_prefix: str,
-    show_segment_labels: bool = False,
-) -> None:
-    for segment in segments:
-        ax.axvline(
-            float(segment["start"]) - 0.5,
-            color="black",
-            linestyle="--",
-            linewidth=0.9,
-            alpha=0.25,
-        )
-
-    if not show_segment_labels or len(segments) == 0:
-        return
-
-    stride = max(1, int(np.ceil(len(segments) / 16.0)))
-    transform = blended_transform_factory(ax.transData, ax.transAxes)
-    for idx, segment in enumerate(segments):
-        if idx % stride != 0:
-            continue
-        center = 0.5 * (float(segment["start"]) + float(segment["end"]))
-        ax.text(
-            center,
-            1.02,
-            f"{label_prefix} {segment['group']}",
-            transform=transform,
-            ha="center",
-            va="bottom",
-            fontsize=8,
-            color="black",
-        )
-
-
-def _kkt_status_color(status: str) -> str:
-    palette = {
-        "kkt_converged": "tab:green",
-        "stationary_infeasible": "tab:red",
-        "max_epochs_reached": "tab:orange",
-        "max_epochs_feasible_best": "tab:blue",
-        "max_epochs_best_primal": "tab:purple",
-        "unknown": "tab:gray",
-        "": "tab:gray",
-    }
-    return palette.get(str(status), "tab:gray")
 
 
 def plot_kkt_residual_history(result: dict[str, Any], figs_dir: str) -> None:
@@ -328,16 +149,20 @@ def plot_kkt_residual_history(result: dict[str, Any], figs_dir: str) -> None:
 
     epoch_positions, segments = _build_segmented_epoch_positions(epoch_history, group_key="block")
     residual_specs = [
-        ("kkt_primal_residual", "r_p", float(result.get("sim_params", {}).get("kkt_primal_tol", np.nan))),
+        (
+            "kkt_primal_residual",
+            "r_p",
+            float(result.get("sim_params", {}).get("kkt_primal_tolerance", np.nan)),
+        ),
         (
             "kkt_complementarity_residual",
             "r_c",
-            float(result.get("sim_params", {}).get("kkt_complementarity_tol", np.nan)),
+            float(result.get("sim_params", {}).get("kkt_complementarity_tolerance", np.nan)),
         ),
         (
             "kkt_stationarity_residual",
             "r_s",
-            float(result.get("sim_params", {}).get("kkt_stationarity_tol", np.nan)),
+            float(result.get("sim_params", {}).get("kkt_stationarity_tolerance", np.nan)),
         ),
     ]
     status_markers = [
@@ -506,7 +331,7 @@ def plot_asynchronality_comparison(result: dict[str, Any], figs_dir: str) -> Non
 
     ax = axes[1, 1]
     if init_vals.size > 0:
-        bins = np.linspace(min(np.min(init_vals), np.min(final_vals)), max(np.max(init_vals), np.max(final_vals)), 40)
+        bins = _finite_histogram_bins(init_vals, final_vals, count=40)
         ax.hist(init_vals, bins=bins, density=True, alpha=0.4, color="tab:red", label="Initial")
         ax.hist(final_vals, bins=bins, density=True, alpha=0.55, color="tab:blue", label="Final")
     ax.set_title("Pairwise asynchronality distribution")

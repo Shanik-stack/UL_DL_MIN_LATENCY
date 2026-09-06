@@ -1,0 +1,63 @@
+Downlink optimizer summary
+
+Setup
+Method: convergence_per_epoch_baseline
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\downlink_dispersion_heavy.yaml
+Seed: 0
+Run started at: 2026-09-06T22:11:13+03:00
+Run completed at: 2026-09-06T22:11:42+03:00
+Scenario: payload
+Objective mode: inverse_cnr_weighted_sum_rate
+Allocation mode: payload
+Weight strategy: inverse_cnr
+Convergence precoder update mode: precoder_net
+Downlink precoder-net scope: per_user_nets
+Precoder parameterization: per_user_channel_to_precoder_mlp
+Initial schedule source: random_precoder_baseline
+
+Final test results
+Initial total latency (random baseline): 0.100867
+Final total latency: 0.007067
+Latency reduction vs random precoder baseline (%): 92.9941
+Initial avg latency (random baseline): 0.033622
+Final avg latency: 0.002356
+Initial asynchronality sum (random baseline): 0.011867
+Final asynchronality sum: 0.005600
+Asynchronality reduction (%): 52.8090
+Initial avg served-user SNR (dB): 4.0000
+Final avg served-user SNR (dB): 13.7146
+Initial avg served-block SINR (dB): 8.3882
+Final avg served-block SINR (dB): 16.0932
+Initial avg all-block SINR (dB): -212.2933
+Final avg all-block SINR (dB): -124.3927
+Total served bits: 360
+Total skipped blocks: 4
+Initial total latency (naive full-T baseline): 0.101200
+Latency reduction vs naive full-T baseline (%): 93.0171
+
+Per-user final test details
+User 0 | init_lat=0.030333 | final_lat=0.003800 | lat_red_vs_random=87.4725% | init_served_block_sinr=12.4486 dB | final_served_block_sinr=17.6098 dB | init_all_block_sinr=-291.7777 dB | final_all_block_sinr=-172.9561 dB | served_blocks=2 | blocks=5 | total_n=57 | served_bits=80 | skipped_blocks=3 | lat_red_vs_fullT=87.5000%
+User 1 | init_lat=0.034267 | final_lat=0.002267 | lat_red_vs_random=93.3852% | init_served_block_sinr=10.9289 dB | final_served_block_sinr=16.0032 dB | init_all_block_sinr=-241.1756 dB | final_all_block_sinr=-89.3312 dB | served_blocks=2 | blocks=3 | total_n=34 | served_bits=120 | skipped_blocks=1 | lat_red_vs_fullT=93.4363%
+User 2 | init_lat=0.036267 | final_lat=0.001000 | lat_red_vs_random=97.2426% | init_served_block_sinr=7.4384 dB | final_served_block_sinr=13.2400 dB | init_all_block_sinr=-92.0269 dB | final_all_block_sinr=13.2400 dB | served_blocks=1 | blocks=1 | total_n=15 | served_bits=160 | skipped_blocks=0 | lat_red_vs_fullT=97.2426%
+
+Per-pair asynchronality
+Users 0-1 | initial_diff=0.003933 | final_diff=0.001533
+Users 0-2 | initial_diff=0.005933 | final_diff=0.002800
+Users 1-2 | initial_diff=0.002000 | final_diff=0.001267
+
+Experiment cost
+Core wall time total (s): 28.569874
+Core wall time training (s): 28.569874
+Testing-phase wall time (s): 0.000000
+Forward+backward NN FLOPs: 4.779e+09
+Forward-only NN FLOPs: 1.593e+09
+Total NN FLOPs: 6.371e+09
+Forward+backward NN evaluations: 970
+Forward-only beam evaluations: 970
+Actual optimizer updates: 970
+Workload counters:
+{'block_optimization_epochs': 490, 'updated_model_calls': 970}
+Notes:
+- Forward+backward NN FLOPs are the network work used to optimize the precoder.
+- Forward-only NN FLOPs are beam extraction and evaluation work in the same optimization routine.
+- Testing-phase wall time is 0.0 because convergence has no separate testing phase.

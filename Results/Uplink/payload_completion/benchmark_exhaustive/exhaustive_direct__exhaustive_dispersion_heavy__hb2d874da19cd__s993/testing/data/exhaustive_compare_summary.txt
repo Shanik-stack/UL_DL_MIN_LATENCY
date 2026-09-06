@@ -1,0 +1,57 @@
+Uplink exhaustive payload-completion validation
+Run started (local): 2026-09-06T22:09:41+03:00
+Run completed (local): 2026-09-06T22:09:48+03:00
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\benchmarks\uplink_exhaustive_dispersion_heavy.yaml
+Seed: 993
+Payload bits per user: [6, 7]
+T per user: [5, 6]
+fs per user (channel uses/s): [15000.0, 15000.0]
+Max compared blocks per user: 2
+Allow exhaustive skip actions: True
+Suppressed detailed inner logs: True
+Catalog detail mode: none
+
+Assumptions
+  - Uplink SNR mode only.
+  - Direct-precoder inner solve only.
+  - Unweighted rate reward inside the beam optimizer.
+  - Exact same frozen channel episode is used for both strategies.
+
+Current online rule
+  - Completed all payloads: False
+  - Per-user final latency (s): [0.0, 0.0]
+  - Total latency sum (s): 0.000000000
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [0, 0]
+  - Per-user remaining bits: [6, 7]
+
+Exhaustive search
+  - Completed all payloads: False
+  - Per-user final latency (s): [0.0, 0.0]
+  - Total latency sum (s): 0.000000000
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [0, 0]
+  - Per-user remaining bits: [6, 7]
+  - Unique exact (B,n) solves: 144
+  - Exact pair catalog size: None
+  - Per-user schedule counts: None
+  - Global schedule count: None
+
+Comparison
+  - Exhaustive latency gain over current online rule: 0.000000000 s
+  - Exhaustive latency gain percentage: 0.0000%
+  - Exhaustive asynchronality gain over current online rule: 0.000000000 s
+
+Best exhaustive allocation combination
+  - Global schedule id: 1
+  - Completed all users: False
+  - Total latency sum (s): 0.000000000
+  - Asynchronality sum (s): 0.000000000
+  - Total remaining bits: 13
+  - Per-user schedule ids: [1, 1]
+  - Per-user latency (s): [0.0, 0.0]
+  - Per-user action signatures: ['', '']
+
+Interpretation
+  - If exhaustive wins, then the current max-feasible-at-n=T then tail-reduce rule is not globally optimal on this frozen episode.
+  - If both match, this episode does not provide a counterexample against the current rule.

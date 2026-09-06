@@ -5,16 +5,26 @@ from typing import Any, Sequence
 import numpy as np
 import torch
 
-from latency_optimization.core.scenarios import build_monte_carlo_sample_scenarios_for_seeds
-from ..block_state import ensure_precoder_block
+from latency_optimization.core.blocklength import build_monte_carlo_n_search_config
+from latency_optimization.core.scenarios import (
+    PAYLOAD_MODE,
+    STREAMING_MODE,
+    build_monte_carlo_sample_scenarios_for_seeds,
+)
+from latency_optimization.experiments.channels import (
+    build_training_snr_schedule,
+    with_monte_carlo_sample_snr_by_user,
+)
+from latency_optimization.experiments.determinism import configure_determinism
+from latency_optimization.precoders.parameters import as_complex_numpy
+from latency_optimization.results.console import format_log_line
+
+from ..block_state import ensure_precoder_block, make_zero_precoder
+from ..system import DownlinkSystem
 
 from .network_operations import (
-    DownlinkSystem,
-    STREAMING_MODE,
-    PAYLOAD_MODE,
     _best_joint_n_target_transition,
     _build_block_joint_scenario,
-    _build_monte_carlo_training_search_cfg,
     _build_rollout_query_from_downlink_state,
     _masked_precoder_snapshot,
     _scenario_forward_pass,
@@ -22,12 +32,6 @@ from .network_operations import (
     _scenario_metrics_from_forward,
     _scenario_metrics_with_models,
     _supported_bits_from_forward,
-    _to_complex_numpy,
-    _zero_precoder,
-    build_training_snr_schedule,
-    configure_determinism,
-    format_log_line,
-    with_monte_carlo_sample_snr_by_user,
 )
 
 
@@ -74,11 +78,11 @@ def _apply_forward_to_working_precoders(
         has_n = int(k) < len(n_targets) and int(n_targets[int(k)]) > 0
         if is_active and has_n:
             working_F[int(k)][int(block)] = np.asarray(
-                _to_complex_numpy(forward["predicted_beams"][int(k)]),
+                as_complex_numpy(forward["predicted_beams"][int(k)]),
                 dtype=np.complex128,
             )
         else:
-            working_F[int(k)][int(block)] = _zero_precoder(system, int(k))
+            working_F[int(k)][int(block)] = make_zero_precoder(system, int(k))
 
 
 def _collect_downlink_tail_rollout_queries(
@@ -125,10 +129,11 @@ def _collect_downlink_tail_rollout_queries(
         )
     )
 
-    search_cfg = _build_monte_carlo_training_search_cfg(
+    search_cfg = build_monte_carlo_n_search_config(
         sim_params,
         n_min=int(sim_params["n_kl_min"]),
         n_max=max(int(v) for v in current_n_targets if int(v) > 0) if any(int(v) > 0 for v in current_n_targets) else 1,
+        phase="training",
     )
     n_min = int(search_cfg["n_min"])
     fixed_step = int(search_cfg["fine_step"])
@@ -337,7 +342,7 @@ def _collect_downlink_episode_rollout_queries(
             if not any(service_mask):
                 for k in range(system.K):
                     ensure_precoder_block(system, working_F, int(k), int(block))
-                    working_F[int(k)][int(block)] = _zero_precoder(system, int(k))
+                    working_F[int(k)][int(block)] = make_zero_precoder(system, int(k))
                 continue
 
             service_scenario = _build_training_block_scenario(

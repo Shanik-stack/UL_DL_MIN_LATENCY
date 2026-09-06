@@ -7,8 +7,12 @@ import numpy as np
 
 from latency_optimization.core.scenarios import STREAMING_MODE, build_experiment_scenario
 from latency_optimization.results.console import format_latency_log_line, format_log_line
+from latency_optimization.results.metrics import build_schedule_reference as _build_initial_baseline_reference
 
-from ..baselines import estimate_initial_latency_from_random_precoders as estimate_random_precoder_latency
+from ..baselines import (
+    estimate_initial_latency_from_random_precoders as estimate_random_precoder_latency,
+    estimate_initial_latency_from_random_precoders_for_scenario as estimate_random_precoder_latency_for_scenario,
+)
 from ..block_state import (
     collect_interference_diagnostics,
     ensure_precoder_block,
@@ -39,26 +43,6 @@ from .solver import (
     optimize_precoders_for_block,
     validate_convergence_precoder_update_mode,
 )
-
-
-def _build_initial_baseline_reference(
-    baseline_name: str,
-    latency: list[float],
-    plan: dict[str, Any],
-    *,
-    snr_db: Sequence[float],
-    sinr_db: Sequence[float],
-) -> dict[str, Any]:
-    return {
-        "schedule_source": str(baseline_name),
-        "latency": [float(v) for v in latency],
-        "n_kl": [list(map(int, values)) for values in plan.get("n_kl", [])],
-        "B_kl": [list(map(int, values)) for values in plan.get("B_kl", [])],
-        "R_alloc": [list(map(float, values)) for values in plan.get("R_alloc", [])],
-        "snr_db": [float(v) for v in snr_db],
-        "sinr_db": [float(v) for v in sinr_db],
-        "skipped_blocks_per_user": [int(v) for v in plan.get("skipped_blocks_per_user", [])],
-    }
 
 
 def _optimize_payload(
@@ -417,12 +401,12 @@ def _optimize_streaming_blocks(
     configured_weight_strategy = validate_convergence_priority_weight_strategy(sim_params)
 
     initial_snr_db, initial_sinr_db = system.get_snr_sinr_db()
-    initial_latency, initial_plan, initial_interference_diag = _estimate_streaming_latency_with_random_precoders(
+    initial_latency, initial_plan, initial_interference_diag = estimate_random_precoder_latency_for_scenario(
         system,
         sim_params,
         scenario,
     )
-    naive_full_t_latency, naive_full_t_plan, _ = _estimate_streaming_latency_with_random_precoders(
+    naive_full_t_latency, naive_full_t_plan, _ = estimate_random_precoder_latency_for_scenario(
         system,
         sim_params,
         scenario,

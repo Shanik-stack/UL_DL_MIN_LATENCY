@@ -4,9 +4,21 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import TwoSlopeNorm
 from matplotlib.lines import Line2D
-from matplotlib.transforms import blended_transform_factory
+
+from latency_optimization.results.plotting import (
+    add_legend_if_present as _add_legend_if_present,
+    build_segmented_epoch_positions as _build_segmented_epoch_positions,
+    combined_finite_limits as _combined_finite_limits,
+    convergence_status_color as _kkt_status_color,
+    draw_epoch_segment_guides as _draw_epoch_segment_guides,
+    finite_histogram_bins as _finite_histogram_bins,
+    imshow_user_pair_matrix as _imshow_with_shared_scale,
+    load_interference_diagnostics as _load_interference_diag,
+    mask_inactive_user_pairs as _mask_inactive_user_pairs,
+    safe_db as _safe_db,
+    segmented_epoch_ticks as _segmented_epoch_ticks,
+)
 
 from .simulation import collect_uplink_interference_diagnostics
 def to_numpy_safe(x):
@@ -21,13 +33,6 @@ def _get_result_save_dir(save_dir):
         raise ValueError("save_dir is required for every plot.")
     os.makedirs(save_dir, exist_ok=True)
     return save_dir
-
-
-def _add_legend_if_present(ax, *, handles=None, labels=None, **kwargs):
-    if handles is None or labels is None:
-        handles, labels = ax.get_legend_handles_labels()
-    if handles and any(str(label).strip() for label in labels):
-        ax.legend(handles=handles, labels=labels, **kwargs)
 
 
 def _extract_uplink_block_results(plot_data):
@@ -844,8 +849,9 @@ def plot_latency_and_asynchronality_from_json(json_path, save_dir=None, prefix="
     init_vals, final_vals = init_diffs[mask], final_diffs[mask]
 
     plt.figure(figsize=(10, 6))
-    plt.hist(init_vals, bins=50, density=True, alpha=0.4, color='red', label='Initial Async')
-    plt.hist(final_vals, bins=50, density=True, alpha=0.6, color='skyblue', label='Final Async')
+    async_bins = _finite_histogram_bins(init_vals, final_vals, count=50)
+    plt.hist(init_vals, bins=async_bins, density=True, alpha=0.4, color='red', label='Initial Async')
+    plt.hist(final_vals, bins=async_bins, density=True, alpha=0.6, color='skyblue', label='Final Async')
     plt.title(f"Global Asynchronality Distribution (K={K} users, {len(init_vals)} pairs)")
     plt.xlabel("Latency Difference "); plt.ylabel("Probability Density"); plt.legend()
     plt.tight_layout()
@@ -911,76 +917,6 @@ def adapt_training_dict_to_plot_format(post_training_data_dict):
         train_all_user_results.append(user_blocks)
 
     return train_all_user_results
-
-def _safe_db(values):
-    arr = np.asarray(values, dtype=float)
-    out = 10.0 * np.log10(np.maximum(arr, 1e-30))
-    if np.isscalar(values):
-        return float(out)
-    return out
-
-
-def _load_interference_diag(payload):
-    if not payload:
-        return None
-    return {
-        "blocks_per_user": [int(v) for v in payload.get("blocks_per_user", [])],
-        "signal": np.asarray(payload.get("signal", []), dtype=float),
-        "total_interference": np.asarray(payload.get("total_interference", []), dtype=float),
-        "noise": np.asarray(payload.get("noise", []), dtype=float),
-        "sinr_db": np.asarray(payload.get("sinr_db", []), dtype=float),
-        "pairwise_block": np.asarray(payload.get("pairwise_block", []), dtype=float),
-        "avg_pairwise_power": np.asarray(payload.get("avg_pairwise_power", []), dtype=float),
-        "avg_pairwise_inr_db": np.asarray(payload.get("avg_pairwise_inr_db", []), dtype=float),
-        "avg_pairwise_share": np.asarray(payload.get("avg_pairwise_share", []), dtype=float),
-        "worst_block": int(payload.get("worst_block", -1)),
-    }
-
-
-def _combined_finite_limits(*matrices):
-    finite_parts = []
-    for matrix in matrices:
-        arr = np.asarray(matrix, dtype=float)
-        finite = arr[np.isfinite(arr)]
-        if finite.size > 0:
-            finite_parts.append(finite.reshape(-1))
-    if not finite_parts:
-        return None, None
-    stacked = np.concatenate(finite_parts)
-    return float(np.min(stacked)), float(np.max(stacked))
-
-
-def _imshow_with_shared_scale(ax, matrix, title, cbar_label, *, cmap="viridis", center_zero=False, vmin=None, vmax=None):
-    mat = np.asarray(matrix, dtype=float)
-    ax.set_title(title)
-    ax.set_xlabel("Interferer user")
-    ax.set_ylabel("Victim user")
-    ax.set_xticks(np.arange(mat.shape[1]))
-    ax.set_yticks(np.arange(mat.shape[0]))
-    if not np.any(np.isfinite(mat)):
-        ax.text(0.5, 0.5, "No active user pair", ha="center", va="center", transform=ax.transAxes)
-        return
-    masked = np.ma.masked_invalid(mat)
-    norm = None
-    if center_zero:
-        finite = mat[np.isfinite(mat)]
-        if finite.size > 0:
-            bound = max(abs(float(np.min(finite))), abs(float(np.max(finite))), 1e-12)
-            norm = TwoSlopeNorm(vmin=-bound, vcenter=0.0, vmax=bound)
-    im = ax.imshow(masked, aspect="auto", interpolation="none", cmap=cmap, norm=norm, vmin=vmin, vmax=vmax)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=cbar_label)
-
-
-def _mask_inactive_user_pairs(matrix, bits_by_user):
-    mat = np.asarray(matrix, dtype=float)
-    active = np.asarray(
-        [sum(int(bits) for bits in user_bits) > 0 for user_bits in bits_by_user],
-        dtype=bool,
-    )
-    if active.size != mat.shape[0] or mat.shape[0] != mat.shape[1]:
-        return mat
-    return np.where(active[:, None] & active[None, :], mat, np.nan)
-
 
 def plot_interference_heatmaps(uplinksystem, figs_dir):
     os.makedirs(figs_dir, exist_ok=True)
@@ -1206,95 +1142,6 @@ def plot_per_user_interference_before_after(result, figs_dir):
     plt.tight_layout()
     plt.savefig(os.path.join(figs_dir, "per_user_interference_before_after.png"), dpi=250)
     plt.close(fig)
-
-
-def _kkt_status_color(status):
-    palette = {
-        "kkt_converged": "tab:green",
-        "stationary_infeasible": "tab:red",
-        "max_epochs_reached": "tab:orange",
-        "max_epochs_feasible_best": "tab:blue",
-        "max_epochs_best_primal": "tab:purple",
-        "unknown": "tab:gray",
-        "": "tab:gray",
-    }
-    return palette.get(str(status), "tab:gray")
-
-
-def _build_segmented_epoch_positions(rows, *, group_key, gap=1.5):
-    if len(rows) == 0:
-        return np.asarray([], dtype=float), []
-
-    positions = []
-    segments = []
-    cursor = 0.0
-    idx = 0
-    while idx < len(rows):
-        group_value = rows[idx].get(group_key)
-        segment_start = cursor + 1.0
-        local_epoch = 1
-        while idx < len(rows) and rows[idx].get(group_key) == group_value:
-            positions.append(cursor + float(local_epoch))
-            idx += 1
-            local_epoch += 1
-        segment_length = local_epoch - 1
-        segment_end = cursor + float(segment_length)
-        segments.append(
-            {
-                "group": group_value,
-                "start": float(segment_start),
-                "end": float(segment_end),
-                "length": int(segment_length),
-            }
-        )
-        cursor = segment_end + float(gap)
-    return np.asarray(positions, dtype=float), segments
-
-
-def _segmented_epoch_ticks(segments, max_labels_per_segment=4):
-    tick_positions = []
-    tick_labels = []
-    for segment in segments:
-        length = int(segment["length"])
-        if length <= 0:
-            continue
-        sample_count = min(max_labels_per_segment, length)
-        local_epochs = np.unique(np.linspace(1, length, sample_count, dtype=int))
-        for local_epoch in local_epochs:
-            tick_positions.append(float(segment["start"]) + float(local_epoch - 1))
-            tick_labels.append(str(int(local_epoch)))
-    return tick_positions, tick_labels
-
-
-def _draw_epoch_segment_guides(ax, segments, *, label_prefix, show_segment_labels=False):
-    for segment in segments:
-        ax.axvline(
-            float(segment["start"]) - 0.5,
-            color="black",
-            linestyle="--",
-            linewidth=0.9,
-            alpha=0.25,
-        )
-
-    if not show_segment_labels or len(segments) == 0:
-        return
-
-    stride = max(1, int(np.ceil(len(segments) / 16.0)))
-    transform = blended_transform_factory(ax.transData, ax.transAxes)
-    for idx, segment in enumerate(segments):
-        if idx % stride != 0:
-            continue
-        center = 0.5 * (float(segment["start"]) + float(segment["end"]))
-        ax.text(
-            center,
-            1.02,
-            f"{label_prefix} {segment['group']}",
-            transform=transform,
-            ha="center",
-            va="bottom",
-            fontsize=8,
-            color="black",
-        )
 
 
 def plot_kkt_residual_history(

@@ -1,0 +1,51 @@
+Run manifest
+
+Setup
+link: Downlink
+method: convergence_per_epoch_baseline
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\downlink_streaming_smoke.yaml
+config_hash: 49f3545ec9ad
+seed: 992
+run_started_at_local: 2026-09-06T22:06:47+03:00
+run_completed_at_local: 2026-09-06T22:06:47+03:00
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Downlink\streaming\convergence_per_epoch\conv_inverse_cnr_per_user_net__streaming_smoke__h49f3545ec9ad__s992
+Files recorded: 22
+Result artifacts: 20
+Plots: 18
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 20
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\result.json
+- testing\data\summary.txt
+- testing\interference\interference_before_after_heatmaps.png
+- testing\interference\interference_heatmaps.png
+- testing\interference\per_user_interference_before_after.png
+- testing\interference\per_user_interference_profiles.png
+- testing\latency_asynchronality\asynchronality_comparison.png
+- testing\latency_asynchronality\latency_comparison.png
+- testing\link_quality\link_quality.png
+- testing\optimization_history\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- testing\optimization_history\F_vs_n\user0_Rfbl_vs_n.png
+- testing\optimization_history\F_vs_n\user1_Rfbl_vs_n.png
+- testing\optimization_history\blocklength_feasibility_curves.png
+- testing\optimization_history\kkt_residual_history.png
+- testing\optimization_history\optimization_history.png
+- testing\optimization_history\per_user_convergence.png
+- testing\optimization_history\rate_violation_heatmap.png
+- testing\schedule_details\block_plan_summary.png
+- testing\schedule_details\per_user_schedule_details.png
+- testing\user_config\user_config_summary.png

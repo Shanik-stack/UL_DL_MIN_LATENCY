@@ -40,12 +40,20 @@ below and above the reference channel quality without changing the FBL regime.
 - `max_epochs`: maximum updates for one precoder solve.
 - `lr_net`: Uplink online precoder learning rate.
 - `user_update_lr`: Downlink online precoder learning rate.
-- `kkt_primal_tol`: stopping threshold for the maximum normalized primal
-  constraint residual.
-- `kkt_complementarity_tol`: stopping threshold for the complementarity
-  residual between each dual variable and its constraint residual.
-- `kkt_stationarity_tol`: stopping threshold for the normalized stationarity
-  residual of the precoder update.
+- `convergence_stopping_rule`
+  - `objective_stationarity`: stop once the relative precoder change is below
+    `precoder_change_tolerance`. This is the compact choice for payload runs.
+  - `kkt_residuals`: stop only after the precoder change is small and the
+    primal/complementarity diagnostics meet their configured limits. This is
+    the streaming choice, where an unchanged but infeasible beam must not be
+    accepted.
+- `precoder_change_tolerance`: relative change between successive precoders.
+- `kkt_primal_tolerance`: maximum permitted rate or power violation for the
+  residual-based stopping rule.
+- `kkt_complementarity_tolerance`: complementarity diagnostic threshold. It is
+  zero in the retained objective-only solvers because they have no dual update.
+- `kkt_stationarity_tolerance`: maximum relative precoder change accepted by
+  the residual-based stopping rule.
 - `print_every_epoch`: terminal logging interval.
 
 ## Downlink network scope

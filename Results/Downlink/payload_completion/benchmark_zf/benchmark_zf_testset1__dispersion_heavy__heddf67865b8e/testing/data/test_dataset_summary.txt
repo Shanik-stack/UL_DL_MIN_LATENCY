@@ -1,0 +1,5 @@
+Downlink ZF held-out test dataset summary
+Total held-out channel episodes: 1
+final_total_latency_seconds: {'mean': 0.009333333333333332, 'std': 0.0, 'valid_episode_count': 1}
+latency_reduction_vs_random_percent: {'mean': 81.28342245989305, 'std': 0.0, 'valid_episode_count': 1}
+final_asynchronality_seconds: {'mean': 0.0031999999999999997, 'std': 0.0, 'valid_episode_count': 1}

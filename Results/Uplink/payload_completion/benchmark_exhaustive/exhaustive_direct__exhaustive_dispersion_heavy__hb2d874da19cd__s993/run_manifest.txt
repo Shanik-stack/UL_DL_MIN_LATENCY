@@ -1,0 +1,50 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Small Exhaustive validation
+scenario: payload
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\benchmarks\uplink_exhaustive_dispersion_heavy.yaml
+config_hash: b2d874da19cd
+seed: 993
+catalog_detail_mode: none
+
+Artifact summary
+Status: complete
+Artifact health: zero_byte_files_detected
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\payload_completion\benchmark_exhaustive\exhaustive_direct__exhaustive_dispersion_heavy__hb2d874da19cd__s993
+Files recorded: 22
+Result artifacts: 20
+Plots: 2
+Empty directories removed: 5
+Zero-byte files: 5
+
+Files by section
+- testing: 20
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\exhaustive_compare.json
+- testing\data\exhaustive_compare_summary.txt
+- testing\data\small_exhaustive_details\best_global_schedule.json
+- testing\data\small_exhaustive_details\best_global_schedule.txt
+- testing\data\small_exhaustive_details\exact_pair_action_catalog.csv
+- testing\data\small_exhaustive_details\exact_pair_action_catalog.json
+- testing\data\small_exhaustive_details\exhaustive_combinations_ascending_latency.csv
+- testing\data\small_exhaustive_details\exhaustive_combinations_ascending_latency.json
+- testing\data\small_exhaustive_details\exhaustive_combinations_descending_latency.csv
+- testing\data\small_exhaustive_details\exhaustive_combinations_descending_latency.json
+- testing\data\small_exhaustive_details\exhaustive_schedule_outcomes.csv
+- testing\data\small_exhaustive_details\exhaustive_schedule_outcomes.json
+- testing\data\small_exhaustive_details\global_schedule_catalog.csv
+- testing\data\small_exhaustive_details\global_schedule_catalog.json
+- testing\data\small_exhaustive_details\strategy_actions.csv
+- testing\data\small_exhaustive_details\strategy_actions.json
+- testing\data\small_exhaustive_details\strategy_comparison_overview.json
+- testing\data\small_exhaustive_details\strategy_comparison_overview.txt
+- testing\optimization_history\latency_comparison.png
+- testing\optimization_history\remaining_bits_trajectories.png

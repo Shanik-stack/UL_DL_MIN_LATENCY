@@ -1,0 +1,107 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Monte Carlo
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\uplink_streaming.yaml
+config_hash: 001340240056
+train_seeds: [990]
+test_seed: 991
+test_seeds: [991]
+training_artifact_reused: None
+run_started_at_local: 2026-09-06T22:03:36+03:00
+run_completed_at_local: 2026-09-06T22:04:03+03:00
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\streaming\monte_carlo\mc_unweighted_rollout_testset1__streaming__h001340240056__s991
+Files recorded: 72
+Result artifacts: 70
+Plots: 50
+Empty directories removed: 6
+Zero-byte files: 0
+
+Files by section
+- testing: 42
+- training: 28
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\blocks\manifest.json
+- testing\blocks\seed_0991.npz
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt
+- testing\samples\seed_0991\data\dispersion_diagnostics.txt
+- testing\samples\seed_0991\data\experiment_scenario.json
+- testing\samples\seed_0991\data\experiment_scenario.txt
+- testing\samples\seed_0991\data\result.json
+- testing\samples\seed_0991\data\summary.txt
+- testing\samples\seed_0991\data\test_results.json
+- testing\samples\seed_0991\data\test_results.txt
+- testing\samples\seed_0991\interference\interference_before_after_heatmaps.png
+- testing\samples\seed_0991\interference\interference_heatmaps.png
+- testing\samples\seed_0991\interference\per_user_interference_before_after.png
+- testing\samples\seed_0991\interference\per_user_interference_profiles.png
+- testing\samples\seed_0991\latency_asynchronality\test_async_distribution.png
+- testing\samples\seed_0991\latency_asynchronality\test_final_async_heatmap.png
+- testing\samples\seed_0991\latency_asynchronality\test_initial_async_heatmap.png
+- testing\samples\seed_0991\latency_asynchronality\test_latency_comparison.png
+- testing\samples\seed_0991\latency_asynchronality\test_latency_histogram.png
+- testing\samples\seed_0991\link_quality\test_link_quality_comparison.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user0_Fchange_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user0_Fincrement_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user0_Fpower_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user0_Rfbl_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user1_Fchange_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user1_Fincrement_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user1_Fpower_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user1_Rfbl_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user2_Fchange_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user2_Fincrement_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user2_Fpower_vs_n.png
+- testing\samples\seed_0991\optimization_history\F_vs_n\user2_Rfbl_vs_n.png
+- testing\samples\seed_0991\optimization_history\testing_optimization_user0_block0.png
+- testing\samples\seed_0991\optimization_history\testing_optimization_user1_block0.png
+- testing\samples\seed_0991\optimization_history\testing_optimization_user2_block0.png
+- testing\samples\seed_0991\optimization_history\testing_user0_summary.png
+- testing\samples\seed_0991\optimization_history\testing_user1_summary.png
+- testing\samples\seed_0991\optimization_history\testing_user2_summary.png
+- testing\samples\seed_0991\schedule_details\per_user_schedule_details.png
+- testing\samples\seed_0991\user_config\user_config_summary.png
+
+[training]
+- training\blocks\manifest.json
+- training\blocks\seed_0990.npz
+- training\data\experiment_scenarios.json
+- training\data\experiment_scenarios.txt
+- training\data\post_training_summary.json
+- training\data\post_training_summary.txt
+- training\data\train_artifact.pt
+- training\data\training_dataset_summary.json
+- training\data\training_dataset_summary.txt
+- training\evaluation\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- training\evaluation\F_vs_n\user0_Fchange_vs_n.png
+- training\evaluation\F_vs_n\user0_Fincrement_vs_n.png
+- training\evaluation\F_vs_n\user0_Fpower_vs_n.png
+- training\evaluation\F_vs_n\user0_Rfbl_vs_n.png
+- training\evaluation\F_vs_n\user1_Fchange_vs_n.png
+- training\evaluation\F_vs_n\user1_Fincrement_vs_n.png
+- training\evaluation\F_vs_n\user1_Fpower_vs_n.png
+- training\evaluation\F_vs_n\user1_Rfbl_vs_n.png
+- training\evaluation\F_vs_n\user2_Fchange_vs_n.png
+- training\evaluation\F_vs_n\user2_Fincrement_vs_n.png
+- training\evaluation\F_vs_n\user2_Fpower_vs_n.png
+- training\evaluation\F_vs_n\user2_Rfbl_vs_n.png
+- training\evaluation\training_evaluation_optimization_user0_block0.png
+- training\evaluation\training_evaluation_optimization_user1_block0.png
+- training\evaluation\training_evaluation_optimization_user2_block0.png
+- training\optimization_history\training_user0_summary.png
+- training\optimization_history\training_user1_summary.png
+- training\optimization_history\training_user2_summary.png

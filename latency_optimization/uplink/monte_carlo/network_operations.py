@@ -1,91 +1,22 @@
-import copy
-from typing import Any, Sequence
+from typing import Sequence
 
 import numpy as np
 import torch
-import torch.nn.functional as F
-
-from latency_optimization.core.blocklength import build_fixed_step_n_candidates, build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
-from latency_optimization.experiments.channels import build_training_snr_schedule, with_monte_carlo_sample_snr_by_user
-from latency_optimization.results.console import format_log_line, format_progress_log_line
 from latency_optimization.runtime import DEVICE
 
-from ..config import RATE_BEAM_REWARD_MODE, UNWEIGHTED_SUM_RATE_OBJECTIVE, get_config, validate_uplink_objective_mode
 from ..precoder_models import (
-    build_user_precoder_net_with_blocklength_and_sigma,
-    export_user_model_specs,
-    export_user_model_states,
     infer_precoder_numpy_with_blocklength_and_sigma,
-    infer_precoder_torch_with_blocklength_and_sigma,
 )
 from ..simulation import (
-    apply_training_solution,
-    clone_nested_arrays,
-    collect_uplink_interference_diagnostics,
     ensure_blocks_up_to,
-    estimate_initial_random_precoder_schedule,
-    estimate_initial_random_precoder_schedule_for_scenario as shared_estimate_initial_random_precoder_schedule_for_scenario,
 )
 from ..system import UplinkSystem
 from ..uplink_rate_model import (
-    build_uplink_rate_covariance,
     evaluate_uplink_rate_numpy,
     evaluate_uplink_rate_torch,
-    uses_uplink_interference,
 )
 
 ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE = "rollout_query_objective"
-
-
-def _build_monte_carlo_training_search_cfg(
-    sim_cfg: dict[str, Any],
-    *,
-    n_min: int,
-    n_max: int,
-) -> dict[str, int | str]:
-    return build_n_search_config(
-        n_min=int(n_min),
-        n_max=int(n_max),
-        fine_step=int(sim_cfg["n_kl_step"]),
-        direction=sim_cfg.get("n_search_direction", "descending"),
-        strategy=sim_cfg.get("n_search_strategy", "fixed_step"),
-        coarse_step=sim_cfg.get("n_search_coarse_step", int(sim_cfg["n_kl_step"])),
-        exponential_factor=sim_cfg.get("n_search_exponential_factor", 2),
-        allow_only_fixed_step=True,
-    )
-
-
-def _build_monte_carlo_test_search_cfg(
-    sim_cfg: dict[str, Any],
-    *,
-    n_min: int,
-    n_max: int,
-) -> dict[str, int | str]:
-    return build_n_search_config(
-        n_min=int(n_min),
-        n_max=int(n_max),
-        fine_step=int(sim_cfg["n_kl_step"]),
-        direction=sim_cfg.get("monte_carlo_test_n_search_direction", sim_cfg.get("n_search_direction", "descending")),
-        strategy=sim_cfg.get("monte_carlo_test_n_search_strategy", sim_cfg.get("n_search_strategy", "fixed_step")),
-        coarse_step=sim_cfg.get(
-            "monte_carlo_test_n_search_coarse_step",
-            sim_cfg.get("n_search_coarse_step", int(sim_cfg["n_kl_step"])),
-        ),
-        exponential_factor=sim_cfg.get(
-            "monte_carlo_test_n_search_exponential_factor",
-            sim_cfg.get("n_search_exponential_factor", 2),
-        ),
-        allow_only_fixed_step=False,
-    )
-
-
-def _to_complex_numpy(x) -> np.ndarray:
-    if isinstance(x, np.ndarray):
-        return x.astype(np.complex64, copy=False)
-    if hasattr(x, "detach"):
-        return x.detach().cpu().numpy().astype(np.complex64, copy=False)
-    return np.asarray(x, dtype=np.complex64)
 
 
 def _compute_r_fbl_torch(

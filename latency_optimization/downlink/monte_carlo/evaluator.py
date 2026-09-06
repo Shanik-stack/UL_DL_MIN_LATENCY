@@ -6,8 +6,15 @@ from typing import Any, Sequence
 import numpy as np
 import torch
 
+from latency_optimization.core.blocklength import build_monte_carlo_n_search_config, run_n_frontier_search
+from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
+from latency_optimization.results.console import format_latency_log_line, format_log_line
 from latency_optimization.runtime import DEVICE
 
+from ..baselines import (
+    estimate_initial_latency_from_random_precoders_for_scenario as shared_estimate_initial_latency_from_random_precoders_for_scenario,
+)
+from ..config import validate_shared_bs_streaming_blocklength_input_mode
 from ..block_state import (
     channels_for_block,
     clone_precoders,
@@ -16,43 +23,33 @@ from ..block_state import (
     evaluate_block_candidate,
     expand_precoders_for_plan,
     maximum_supported_bits,
+    make_zero_precoder,
     power_to_db,
     user_link_budget,
     zero_precoder_block,
 )
-
-from .network_operations import (
-    DownlinkSystem,
-    STREAMING_MODE,
-    PAYLOAD_MODE,
-    _best_joint_n_target_transition,
-    _build_block_joint_scenario,
-    _build_monte_carlo_test_search_cfg,
-    _copy_snapshot_with_block_overrides,
-    _downlink_monte_carlo_precoder_parameterization,
-    _masked_precoder_snapshot,
-    _models_output_full_bs_precoder,
-    validate_shared_bs_streaming_blocklength_input_mode,
-    _scenario_metrics_with_models,
-    _serialize_nested_history,
-    _shared_n_targets_for_block,
-    _shared_precoder_snapshot_for_targets,
-    _zero_downlink_precoder,
-    build_experiment_scenario,
-    export_user_model_specs,
-    format_latency_log_line,
-    format_log_line,
-    infer_raw_precoder_numpy_with_blocklength,
-    model_outputs_full_bs_precoder,
-    normalized_inverse_cnr_weights,
+from ..objective import (
     objective_display_name,
     objective_weight_strategy_name,
     validate_convergence_objective_mode,
     validate_convergence_priority_weight_strategy,
-    validate_downlink_precoder_net_scope,
-    run_n_frontier_search,
-    shared_estimate_initial_latency_from_random_precoders_for_scenario,
 )
+from ..precoders.inference import infer_raw_precoder_numpy_with_blocklength
+from ..precoders.models import model_outputs_full_bs_precoder, validate_downlink_precoder_net_scope
+from ..system import DownlinkSystem
+from ..user_weights import normalized_inverse_cnr_weights
+
+from .network_operations import (
+    _best_joint_n_target_transition,
+    _build_block_joint_scenario,
+    _copy_snapshot_with_block_overrides,
+    _masked_precoder_snapshot,
+    _models_output_full_bs_precoder,
+    _scenario_metrics_with_models,
+    _shared_n_targets_for_block,
+    _shared_precoder_snapshot_for_targets,
+)
+from .reporting import build_evaluation_result
 
 
 def _predict_user_precoder_for_blocklength(
@@ -120,7 +117,7 @@ def _allocate_streaming_bits_from_precoder_snapshot(
     T_k = int(system.T[k])
     n_min = int(sim_params["n_kl_min"])
     n_step = int(sim_params["n_kl_step"])
-    zero_beam = _zero_downlink_precoder(system, k)
+    zero_beam = make_zero_precoder(system, k)
 
     if int(target_bits) <= 0:
         return 0, int(T_k), 0.0, zero_beam
@@ -202,10 +199,11 @@ def _allocate_bits_for_user_block_precoder_net(
     chosen_F = np.array(snapshot_T[k][l], copy=True)
 
     if int(remaining_bits) <= B_max:
-        search_cfg = _build_monte_carlo_test_search_cfg(
+        search_cfg = build_monte_carlo_n_search_config(
             sim_params,
             n_min=int(n_min),
             n_max=int(T_k),
+            phase="testing",
         )
 
         def _evaluate_payload_candidate(candidate_n: int, _stage_name: str) -> dict[str, Any]:
@@ -259,7 +257,7 @@ def _allocate_streaming_bits_with_precoder_network(
     T_k = int(system.T[k])
     n_min = int(sim_params["n_kl_min"])
     n_step = int(sim_params["n_kl_step"])
-    zero_beam = _zero_downlink_precoder(system, k)
+    zero_beam = make_zero_precoder(system, k)
 
     if int(target_bits) <= 0:
         return 0, int(T_k), 0.0, zero_beam
@@ -291,10 +289,11 @@ def _allocate_streaming_bits_with_precoder_network(
     chosen_R = float(R_T)
     chosen_F = np.array(snapshot_T[k][l], copy=True)
     if int(B_used) >= int(target_bits) and int(target_bits) > 0:
-        search_cfg = _build_monte_carlo_test_search_cfg(
+        search_cfg = build_monte_carlo_n_search_config(
             sim_params,
             n_min=int(n_min),
             n_max=int(T_k),
+            phase="testing",
         )
 
         def _evaluate_streaming_candidate(candidate_n: int, _stage_name: str) -> dict[str, Any]:
@@ -558,7 +557,7 @@ def _finalize_streaming_plans_from_shared_bs_precoder(
             target_bits = int(target_bits_by_user[int(k)])
             if int(target_bits) <= 0 or float(active_mask[int(k)]) <= 0.5:
                 if int(l) < len(committed_snapshot[int(k)]):
-                    committed_snapshot[int(k)][l] = _zero_downlink_precoder(system, int(k))
+                    committed_snapshot[int(k)][l] = make_zero_precoder(system, int(k))
                 continue
 
             n_used = int(n_targets[int(k)])
@@ -567,7 +566,7 @@ def _finalize_streaming_plans_from_shared_bs_precoder(
             if achievable_bits <= 0:
                 if np.linalg.norm(np.asarray(committed_snapshot[int(k)][l])) > 0.0:
                     changed = True
-                committed_snapshot[int(k)][l] = _zero_downlink_precoder(system, int(k))
+                committed_snapshot[int(k)][l] = make_zero_precoder(system, int(k))
                 continue
             next_active_users.append(int(k))
 
@@ -584,7 +583,7 @@ def _finalize_streaming_plans_from_shared_bs_precoder(
                 "B_used": 0,
                 "n_used": int(system.T[int(k)]),
                 "R_used": 0.0,
-                "F_used": _zero_downlink_precoder(system, int(k)),
+                "F_used": make_zero_precoder(system, int(k)),
                 "skipped": False,
                 "target_bits": int(target_bits),
             }
@@ -597,7 +596,7 @@ def _finalize_streaming_plans_from_shared_bs_precoder(
         achievable_bits = max(maximum_supported_bits(n_used, actual_rate), 0)
         B_final = int(min(int(target_bits), achievable_bits))
         if B_final <= 0:
-            zero_beam = _zero_downlink_precoder(system, int(k))
+            zero_beam = make_zero_precoder(system, int(k))
             committed_snapshot[int(k)][l] = np.array(zero_beam, copy=True)
             final_plans[int(k)] = {
                 "B_used": 0,
@@ -890,29 +889,6 @@ def _estimate_initial_latency_from_random_precoders_for_scenario(
             },
             {},
         )
-
-
-def _build_initial_baseline_reference(
-    baseline_name: str,
-    latency: Sequence[float],
-    plan: dict[str, Any],
-    *,
-    snr_db: Sequence[float],
-    sinr_db: Sequence[float],
-) -> dict[str, Any]:
-    return {
-        "schedule_source": str(baseline_name),
-        "completed": bool(plan.get("completed", True)),
-        "failure_reason": str(plan.get("failure_reason", "")),
-        "remaining_bits": [int(value) for value in plan.get("remaining_bits", [])],
-        "latency": [float(v) for v in latency],
-        "n_kl": [list(map(int, values)) for values in plan.get("n_kl", [])],
-        "B_kl": [list(map(int, values)) for values in plan.get("B_kl", [])],
-        "R_alloc": [list(map(float, values)) for values in plan.get("R_alloc", [])],
-        "snr_db": [float(v) for v in snr_db],
-        "sinr_db": [float(v) for v in sinr_db],
-        "skipped_blocks_per_user": [int(v) for v in plan.get("skipped_blocks_per_user", [])],
-    }
 
 
 def _evaluate_downlink_precoder_network_for_streaming(
@@ -1269,82 +1245,39 @@ def _evaluate_downlink_precoder_network_for_streaming(
     final_snr_db, final_sinr_db = system.get_snr_sinr_db()
     final_interference_diag = collect_interference_diagnostics(system)
 
-    result = {
-        "method_name": method_name,
-        "objective_mode": str(objective_public_name),
-        "allocation_mode": "streaming",
-        "weight_strategy": str(weight_strategy_name),
-        "precoder_parameterization": _downlink_monte_carlo_precoder_parameterization(
-            model_scope,
-        ),
-        "downlink_precoder_net_scope": str(model_scope),
-        "shared_bs_streaming_blocklength_input_mode": (
-            str(streaming_blocklength_input_mode)
-            if str(model_scope) == "bs_shared_net"
-            else "not_applicable"
-        ),
-        "user_model_specs": export_user_model_specs(
-            system.Nr,
-            system.Nb,
-            system.dk,
-            uses_blocklength_input=True,
-            context_k=system.K,
-            context_max_nr=int(np.max(system.Nr)),
-            context_max_nb=int(np.max(system.Nb)),
-            context_max_dk=int(np.max(system.dk)),
-            model_scope=model_scope,
-        ),
-        "n_kl": [list(map(int, v)) for v in n_plan],
-        "B_kl": [list(map(int, v)) for v in B_plan],
-        "R_fbl": [list(map(float, user_rates)) for user_rates in system.R_fbl],
-        "R_alloc": [list(map(float, v)) for v in R_plan],
-        "initial_latency": list(map(float, initial_latency)),
-        "initial_plan": initial_plan,
-        "initial_baseline_completed": bool(initial_plan.get("completed", True)),
-        "initial_baseline_failure": str(initial_plan.get("failure_reason", "")),
-        "initial_schedule_source": "random_precoder_baseline",
-        "baseline_references": {
-            "random_precoder_baseline": _build_initial_baseline_reference(
-                "random_precoder_baseline",
-                initial_latency,
-                initial_plan,
-                snr_db=initial_snr_db,
-                sinr_db=initial_sinr_db,
-            ),
-            "naive_full_T_baseline": _build_initial_baseline_reference(
-                "naive_full_T_baseline",
-                naive_full_t_latency,
-                naive_full_t_plan,
-                snr_db=initial_snr_db,
-                sinr_db=initial_sinr_db,
-            ),
-        },
-        "initial_interference_diag": initial_interference_diag,
-        "final_latency": system.latency.tolist(),
-        "initial_snr_db": initial_snr_db,
-        "final_snr_db": final_snr_db,
-        "initial_sinr_db": initial_sinr_db,
-        "final_sinr_db": final_sinr_db,
-        "final_interference_diag": final_interference_diag,
-        "outer_history": outer_history,
-        "epoch_history": epoch_history,
-        "rate_points": rate_points,
-        "blocks_per_user": [len(v) for v in n_plan],
-        "precoder_net_training_losses": [
-            list(map(float, row))
-            for row in ((precoder_net_training_history or {}).get("per_user_objective_loss", []))
-        ],
-        "precoder_net_training_history": _serialize_nested_history(precoder_net_training_history or {}),
-        "train_seeds": [int(v) for v in (train_seeds or [])],
-        "training_dataset_sizes": [int(v) for v in (training_dataset_sizes or [])],
-        "training_active_user_case_counts_per_user": [int(v) for v in (training_dataset_sizes or [])],
-        "skipped_blocks_per_user": [int(v) for v in skipped_blocks_per_user],
-        "evaluation_cost_counters": evaluation_cost_counters,
-        "core_evaluation_wall_time_seconds": float(perf_counter() - core_evaluation_start),
-        "scenario_mode": STREAMING_MODE,
-        "scenario_block_targets": block_targets.tolist(),
-    }
-    return result
+    return build_evaluation_result(
+        system=system,
+        sim_params=sim_params,
+        method_name=method_name,
+        objective_name=objective_public_name,
+        weight_strategy=weight_strategy_name,
+        allocation_mode="streaming",
+        model_scope=model_scope,
+        n_plan=n_plan,
+        bits_plan=B_plan,
+        rate_plan=R_plan,
+        initial_latency=initial_latency,
+        initial_plan=initial_plan,
+        full_block_latency=naive_full_t_latency,
+        full_block_plan=naive_full_t_plan,
+        initial_snr_db=initial_snr_db,
+        final_snr_db=final_snr_db,
+        initial_sinr_db=initial_sinr_db,
+        final_sinr_db=final_sinr_db,
+        initial_interference=initial_interference_diag,
+        final_interference=final_interference_diag,
+        outer_history=outer_history,
+        epoch_history=epoch_history,
+        rate_points=rate_points,
+        training_history=precoder_net_training_history,
+        train_seeds=train_seeds,
+        training_dataset_sizes=training_dataset_sizes,
+        skipped_blocks_per_user=skipped_blocks_per_user,
+        evaluation_cost_counters=evaluation_cost_counters,
+        evaluation_wall_time_seconds=perf_counter() - core_evaluation_start,
+        scenario_mode=STREAMING_MODE,
+        scenario_block_targets=block_targets.tolist(),
+    )
 
 
 def evaluate_downlink_precoder_net(
@@ -1720,83 +1653,38 @@ def evaluate_downlink_precoder_net(
     final_interference_diag = collect_interference_diagnostics(system)
     model_scope = validate_downlink_precoder_net_scope(sim_params.get("downlink_precoder_net_scope", "per_user_nets"))
 
-    result = {
-        "method_name": method_name,
-        "objective_mode": str(objective_public_name),
-        "allocation_mode": "greedy",
-        "weight_strategy": str(weight_strategy_name),
-        "precoder_parameterization": _downlink_monte_carlo_precoder_parameterization(
-            model_scope,
-        ),
-        "downlink_precoder_net_scope": str(model_scope),
-        "shared_bs_streaming_blocklength_input_mode": (
-            validate_shared_bs_streaming_blocklength_input_mode(
-                sim_params.get("shared_bs_streaming_blocklength_input_mode", "joint_blocklength_vector")
-            )
-            if str(model_scope) == "bs_shared_net"
-            else "not_applicable"
-        ),
-        "user_model_specs": export_user_model_specs(
-            system.Nr,
-            system.Nb,
-            system.dk,
-            uses_blocklength_input=True,
-            context_k=system.K,
-            context_max_nr=int(np.max(system.Nr)),
-            context_max_nb=int(np.max(system.Nb)),
-            context_max_dk=int(np.max(system.dk)),
-            model_scope=model_scope,
-        ),
-        "n_kl": [list(map(int, v)) for v in n_plan],
-        "B_kl": [list(map(int, v)) for v in B_plan],
-        "R_fbl": [list(map(float, user_rates)) for user_rates in system.R_fbl],
-        "R_alloc": [list(map(float, v)) for v in R_plan],
-        "initial_latency": list(map(float, initial_latency)),
-        "initial_plan": initial_plan,
-        "initial_baseline_completed": bool(initial_plan.get("completed", True)),
-        "initial_baseline_failure": str(initial_plan.get("failure_reason", "")),
-        "initial_schedule_source": "random_precoder_baseline",
-        "baseline_references": {
-            "random_precoder_baseline": _build_initial_baseline_reference(
-                "random_precoder_baseline",
-                initial_latency,
-                initial_plan,
-                snr_db=initial_snr_db,
-                sinr_db=initial_sinr_db,
-            ),
-            "naive_full_T_baseline": _build_initial_baseline_reference(
-                "naive_full_T_baseline",
-                naive_full_t_latency,
-                naive_full_t_plan,
-                snr_db=initial_snr_db,
-                sinr_db=initial_sinr_db,
-            ),
-        },
-        "initial_interference_diag": initial_interference_diag,
-        "final_latency": system.latency.tolist(),
-        "initial_snr_db": initial_snr_db,
-        "final_snr_db": final_snr_db,
-        "initial_sinr_db": initial_sinr_db,
-        "final_sinr_db": final_sinr_db,
-        "final_interference_diag": final_interference_diag,
-        "outer_history": outer_history,
-        "epoch_history": epoch_history,
-        "rate_points": rate_points,
-        "blocks_per_user": [len(v) for v in n_plan],
-        "precoder_net_training_losses": [
-            list(map(float, row))
-            for row in ((precoder_net_training_history or {}).get("per_user_objective_loss", []))
-        ],
-        "precoder_net_training_history": _serialize_nested_history(precoder_net_training_history or {}),
-        "train_seeds": [int(v) for v in (train_seeds or [])],
-        "training_dataset_sizes": [int(v) for v in (training_dataset_sizes or [])],
-        "training_active_user_case_counts_per_user": [int(v) for v in (training_dataset_sizes or [])],
-        "skipped_blocks_per_user": [0 for _ in range(system.K)],
-        "evaluation_cost_counters": evaluation_cost_counters,
-        "core_evaluation_wall_time_seconds": float(perf_counter() - core_evaluation_start),
-        "scenario_mode": PAYLOAD_MODE,
-    }
-    return result
+    return build_evaluation_result(
+        system=system,
+        sim_params=sim_params,
+        method_name=method_name,
+        objective_name=objective_public_name,
+        weight_strategy=weight_strategy_name,
+        allocation_mode="greedy",
+        model_scope=model_scope,
+        n_plan=n_plan,
+        bits_plan=B_plan,
+        rate_plan=R_plan,
+        initial_latency=initial_latency,
+        initial_plan=initial_plan,
+        full_block_latency=naive_full_t_latency,
+        full_block_plan=naive_full_t_plan,
+        initial_snr_db=initial_snr_db,
+        final_snr_db=final_snr_db,
+        initial_sinr_db=initial_sinr_db,
+        final_sinr_db=final_sinr_db,
+        initial_interference=initial_interference_diag,
+        final_interference=final_interference_diag,
+        outer_history=outer_history,
+        epoch_history=epoch_history,
+        rate_points=rate_points,
+        training_history=precoder_net_training_history,
+        train_seeds=train_seeds,
+        training_dataset_sizes=training_dataset_sizes,
+        skipped_blocks_per_user=[0 for _ in range(system.K)],
+        evaluation_cost_counters=evaluation_cost_counters,
+        evaluation_wall_time_seconds=perf_counter() - core_evaluation_start,
+        scenario_mode=PAYLOAD_MODE,
+    )
 
 
 __all__ = ["evaluate_downlink_precoder_net"]

@@ -6,27 +6,33 @@ from typing import Any, Sequence
 import numpy as np
 import torch
 
-from latency_optimization.core.scenarios import build_monte_carlo_sample_scenarios_for_seeds
+from latency_optimization.core.blocklength import build_monte_carlo_n_search_config, run_n_frontier_search
+from latency_optimization.core.scenarios import (
+    PAYLOAD_MODE,
+    STREAMING_MODE,
+    build_monte_carlo_sample_scenarios_for_seeds,
+)
+from latency_optimization.experiments.channels import (
+    build_training_snr_schedule,
+    with_monte_carlo_sample_snr_by_user,
+)
+from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
 
-from .network_operations import (
-    STREAMING_MODE,
-    PAYLOAD_MODE,
+from ..config import (
     RATE_BEAM_REWARD_MODE,
-    ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    UplinkSystem,
-    _build_monte_carlo_training_search_cfg,
+    get_config,
+)
+from ..precoder_models import infer_precoder_numpy_with_blocklength_and_sigma
+from ..simulation import ensure_blocks_up_to
+from ..system import UplinkSystem
+from ..uplink_rate_model import build_uplink_rate_covariance
+
+from .network_operations import (
+    ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE,
     _build_precoder_net_snapshot_for_active_mask,
     _compute_r_fbl_np,
-    build_training_snr_schedule,
-    build_uplink_rate_covariance,
-    ensure_blocks_up_to,
-    format_log_line,
-    get_config,
-    infer_precoder_numpy_with_blocklength_and_sigma,
-    run_n_frontier_search,
-    with_monte_carlo_sample_snr_by_user,
 )
 
 
@@ -155,32 +161,6 @@ def _aggregate_epoch_means(per_user_histories: Sequence[Sequence[float]]) -> lis
 
 def _serialize_count_dict(counts: dict[int, int]) -> dict[str, int]:
     return {str(int(k)): int(v) for k, v in sorted(counts.items())}
-
-
-def _clone_model_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
-    return {
-        key: value.detach().cpu().clone()
-        for key, value in model.state_dict().items()
-    }
-
-
-def _relative_model_state_change(
-    model: torch.nn.Module,
-    previous_state: dict[str, torch.Tensor] | None,
-) -> float:
-    if previous_state is None:
-        return float("inf")
-    current_state = model.state_dict()
-    delta_norm_sq = 0.0
-    reference_norm_sq = 0.0
-    for key, current_value in current_state.items():
-        current_cpu = current_value.detach().cpu()
-        previous_cpu = previous_state[key]
-        delta_norm_sq += float(torch.sum((current_cpu - previous_cpu).pow(2)).item())
-        reference_norm_sq += float(torch.sum(previous_cpu.pow(2)).item())
-    delta_norm = float(np.sqrt(max(delta_norm_sq, 0.0)))
-    reference_norm = float(np.sqrt(max(reference_norm_sq, 0.0)))
-    return float(delta_norm / max(reference_norm, 1e-12))
 
 
 def _resolve_rollout_anchor_bits(rate: float, n_kl: int) -> int:
@@ -454,10 +434,11 @@ def _collect_uplink_payload_rollout_queries_for_episode(
                 )
             )
 
-            search_cfg = _build_monte_carlo_training_search_cfg(
+            search_cfg = build_monte_carlo_n_search_config(
                 sim_cfg,
                 n_min=int(sim_cfg["n_kl_min"]),
                 n_max=int(T_ref),
+                phase="training",
             )
             def _evaluate_payload_rollout_candidate(candidate: int, stage_name: str) -> dict[str, Any]:
                 metrics = _evaluate_uplink_rollout_query_numpy(

@@ -1,6 +1,11 @@
 import unittest
 
-from latency_optimization.optimization.stopping import objective_convergence_status
+from latency_optimization.optimization.stopping import (
+    KktResiduals,
+    KktTolerances,
+    convergence_status,
+    objective_convergence_status,
+)
 
 
 class OptimizationStoppingTests(unittest.TestCase):
@@ -25,6 +30,32 @@ class OptimizationStoppingTests(unittest.TestCase):
     def test_negative_tolerance_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             objective_convergence_status(0.0, -1.0, has_previous_state=True)
+
+    def test_kkt_rule_rejects_stationary_infeasible_state(self) -> None:
+        self.assertEqual(
+            convergence_status(
+                "kkt_residuals",
+                precoder_change=1e-4,
+                precoder_change_tolerance=1e-3,
+                has_previous_state=True,
+                residuals=KktResiduals(2e-3, 0.0, 1e-4),
+                kkt_tolerances=KktTolerances(1e-3, 1e-6, 1e-3),
+            ),
+            "stationary_infeasible",
+        )
+
+    def test_kkt_rule_accepts_feasible_stationary_state(self) -> None:
+        self.assertEqual(
+            convergence_status(
+                "kkt_residuals",
+                precoder_change=1e-4,
+                precoder_change_tolerance=1e-3,
+                has_previous_state=True,
+                residuals=KktResiduals(1e-4, 0.0, 1e-4),
+                kkt_tolerances=KktTolerances(1e-3, 1e-6, 1e-3),
+            ),
+            "kkt_converged",
+        )
 
 
 if __name__ == "__main__":

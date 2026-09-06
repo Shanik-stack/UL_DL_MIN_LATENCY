@@ -8,6 +8,14 @@ import torch
 from latency_optimization.runtime import DEVICE
 
 
+def as_complex_numpy(value, *, dtype=np.complex64) -> np.ndarray:
+    if isinstance(value, np.ndarray):
+        return value.astype(dtype, copy=False)
+    if hasattr(value, "detach"):
+        return value.detach().cpu().numpy().astype(dtype, copy=False)
+    return np.asarray(value, dtype=dtype)
+
+
 def complex_parameter_from_numpy(
     matrix: np.ndarray,
     *,

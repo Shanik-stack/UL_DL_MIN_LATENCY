@@ -1,0 +1,4 @@
+Best uplink exhaustive schedule
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\benchmarks\uplink_exhaustive_dispersion_heavy.yaml
+Seed: 993
+Best schedule: {'global_schedule_id': 1, 'all_completed': False, 'total_latency_sum': 0, 'total_remaining_bits': 13, 'per_user_schedule_ids': [1, 1], 'per_user_latency': [0, 0], 'per_user_remaining_bits': [6, 7], 'per_user_action_signatures': ['', ''], 'per_user_latency_seconds': [0.0, 0.0], 'total_latency_sum_seconds': 0.0, 'asynchronality_pairs_seconds': [{'user_i': 0, 'user_j': 1, 'abs_latency_diff': 0.0}], 'asynchronality_sum_seconds': 0.0}

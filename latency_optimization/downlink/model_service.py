@@ -25,12 +25,21 @@ from .precoders.inference import (
 from .system import DownlinkSystem
 
 
-def describe_precoder_parameterization(model_scope: str, update_mode: str) -> str:
+def describe_precoder_parameterization(
+    model_scope: str,
+    update_mode: str,
+    *,
+    uses_blocklength_input: bool = False,
+) -> str:
     if update_mode == "direct_precoder":
         return "direct_active_block_precoders"
     if validate_downlink_precoder_net_scope(model_scope) == "bs_shared_net":
         return "bs_shared_block_context_to_full_precoder_mlp"
-    return "per_user_channel_to_precoder_mlp"
+    return (
+        "per_user_block_context_to_precoder_mlp"
+        if uses_blocklength_input
+        else "per_user_channel_to_precoder_mlp"
+    )
 
 
 def initial_baseline_model_scope() -> str:

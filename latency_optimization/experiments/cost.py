@@ -242,7 +242,7 @@ def format_experiment_cost_lines(experiment_cost: Mapping[str, Any] | None) -> l
         f"Forward-only NN FLOPs: {_format_large_number(_safe_float(experiment_cost.get('estimated_nn_inference_flops')))}",
         f"Total NN FLOPs: {_format_large_number(_safe_float(experiment_cost.get('estimated_nn_total_flops')))}",
         (
-            "Total forward+backward NN evaluations: "
+            "Forward+backward NN evaluations: "
             f"{_safe_int(experiment_cost.get('training_forward_backward_sample_equivalents'))}"
         ),
     ]
@@ -260,12 +260,6 @@ def format_experiment_cost_lines(experiment_cost: Mapping[str, Any] | None) -> l
         )
     else:
         lines.append(f"Optimizer steps: {_safe_int(experiment_cost.get('optimizer_steps'))}")
-
-    if "extra_gradient_evaluations" in experiment_cost:
-        lines.append(
-            "Extra gradient evaluations used to check the current constrained joint state: "
-            f"{_safe_int(experiment_cost.get('extra_gradient_evaluations'))}"
-        )
 
     workload = experiment_cost.get("workload_counters", {})
     if isinstance(workload, Mapping) and len(workload) > 0:
@@ -305,7 +299,6 @@ def build_uplink_convergence_cost(
 
     training_forward_backward_equivalents = int(sum(solver_epochs_per_user))
     actual_optimizer_updates = int(sum(optimizer_updates_per_user))
-    extra_gradient_evaluations = int(training_forward_backward_equivalents - actual_optimizer_updates)
     inference_forward_calls = int(sum(visited_states_per_user))
     if update_mode == "direct_precoder":
         estimated_training_flops = 0.0
@@ -345,7 +338,6 @@ def build_uplink_convergence_cost(
         "inference_forward_calls": int(inference_forward_calls),
         "optimizer_steps": int(actual_optimizer_updates),
         "actual_optimizer_updates": int(actual_optimizer_updates),
-        "extra_gradient_evaluations": int(extra_gradient_evaluations),
         "forward_only_beam_evaluations": int(inference_forward_calls),
         "per_user_forward_flops": [int(v) for v in per_user_forward_flops],
         "workload_counters": {
@@ -425,7 +417,6 @@ def build_downlink_convergence_cost(
         "inference_forward_calls": int(forward_only_calls),
         "optimizer_steps": int(optimizer_updates),
         "actual_optimizer_updates": int(optimizer_updates),
-        "extra_gradient_evaluations": 0,
         "forward_only_beam_evaluations": int(forward_only_calls),
         "per_user_forward_flops": [int(value) for value in model_forward_flops],
         "workload_counters": {
@@ -701,5 +692,3 @@ def build_downlink_monte_carlo_total_cost(
             "Forward-only NN FLOPs count the forward-only beam evaluations in the held-out downlink test pass.",
         ],
     }
-
-

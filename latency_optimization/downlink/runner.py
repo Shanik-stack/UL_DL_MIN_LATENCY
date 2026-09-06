@@ -9,6 +9,12 @@ import numpy as np
 from latency_optimization.core.scenarios import STREAMING_MODE
 from latency_optimization.experiments.cost import build_downlink_convergence_cost, format_experiment_cost_lines
 from latency_optimization.experiments.determinism import configure_determinism
+from latency_optimization.results.metrics import (
+    format_optional_db as _format_optional_db,
+    mean_for_active_users as _mean_for_served_users,
+    pairwise_latency_differences as _pairwise_latency_diffs,
+    reference_latency_metrics as _compute_reference_latency_metrics,
+)
 from latency_optimization.results.naming import (
     format_method_tag,
     format_objective_tag,
@@ -80,36 +86,6 @@ def build_result_tag(
     return make_method_result_tag(method_tag, cfg_stem, seed=seed, cfg_hash=cfg_hash)
 
 
-def _pairwise_latency_diffs(latencies: list[float]) -> tuple[list[list[float]], list[dict[str, float]], float]:
-    arr = [float(x) for x in latencies]
-    K = len(arr)
-    matrix = [[abs(arr[i] - arr[j]) for j in range(K)] for i in range(K)]
-    pair_details: list[dict[str, float]] = []
-    async_sum = 0.0
-    for i in range(K):
-        for j in range(i + 1, K):
-            diff = float(matrix[i][j])
-            async_sum += diff
-            pair_details.append({"user_i": int(i), "user_j": int(j), "abs_latency_diff": diff})
-    return matrix, pair_details, float(async_sum)
-
-
-def _mean_for_served_users(values: object, served_block_counts: list[int]) -> float | None:
-    user_values = [float(value) for value in values]
-    valid = [
-        value
-        for value, count in zip(user_values, served_block_counts)
-        if int(count) > 0 and np.isfinite(value)
-    ]
-    return float(np.mean(valid)) if valid else None
-
-
-def _format_optional_db(label: str, value: object) -> str:
-    if value is None:
-        return f"{label}: n/a (no served blocks)"
-    return f"{label}: {float(value):.4f}"
-
-
 def _metric_matrix(values: object) -> np.ndarray:
     arr = np.asarray(values, dtype=float)
     if arr.ndim == 0:
@@ -168,59 +144,6 @@ def _mean_valid_rows(
 
     global_mean = float(np.mean(global_values)) if global_values else 0.0
     return per_user, global_mean, per_user_counts, int(len(global_values)), has_any
-
-
-def _compute_reference_latency_metrics(
-    reference_latency: list[float],
-    final_latency: list[float],
-    *,
-    reference_completed: bool = True,
-) -> dict:
-    if not reference_completed or not np.all(np.isfinite(reference_latency)):
-        return {
-            "baseline_completed": False,
-            "initial_latency": [float(v) for v in reference_latency],
-            "initial_total_latency": float("nan"),
-            "initial_avg_latency": float("nan"),
-            "latency_reduction_per_user_percent": [float("nan") for _ in final_latency],
-            "total_latency_reduction_percent": float("nan"),
-            "initial_asynchronality_sum": float("nan"),
-            "final_asynchronality_sum": float("nan"),
-            "asynchronality_reduction_percent": float("nan"),
-        }
-    per_user_reduction: list[float] = []
-    for init_val, final_val in zip(reference_latency, final_latency):
-        if init_val > 0:
-            reduction = ((init_val - final_val) / init_val) * 100.0
-        else:
-            reduction = 0.0
-        per_user_reduction.append(float(reduction))
-
-    initial_total_latency = float(sum(reference_latency))
-    final_total_latency = float(sum(final_latency))
-    if initial_total_latency > 0:
-        total_latency_reduction_percent = ((initial_total_latency - final_total_latency) / initial_total_latency) * 100.0
-    else:
-        total_latency_reduction_percent = 0.0
-
-    _, _, initial_async_sum = _pairwise_latency_diffs(reference_latency)
-    _, _, final_async_sum = _pairwise_latency_diffs(final_latency)
-    if initial_async_sum > 0:
-        async_reduction_percent = ((initial_async_sum - final_async_sum) / initial_async_sum) * 100.0
-    else:
-        async_reduction_percent = 0.0
-
-    return {
-        "baseline_completed": True,
-        "initial_latency": [float(v) for v in reference_latency],
-        "initial_total_latency": initial_total_latency,
-        "initial_avg_latency": float(initial_total_latency / max(len(reference_latency), 1)),
-        "latency_reduction_per_user_percent": per_user_reduction,
-        "total_latency_reduction_percent": float(total_latency_reduction_percent),
-        "initial_asynchronality_sum": float(initial_async_sum),
-        "final_asynchronality_sum": float(final_async_sum),
-        "asynchronality_reduction_percent": float(async_reduction_percent),
-    }
 
 
 def _compute_summary_metrics(result: dict) -> dict:

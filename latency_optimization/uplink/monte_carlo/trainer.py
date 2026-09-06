@@ -7,25 +7,29 @@ import numpy as np
 import torch
 
 from latency_optimization.runtime import DEVICE
-from latency_optimization.optimization.stopping import KktResiduals, KktTolerances, classify_convergence
+from latency_optimization.experiments.channels import with_monte_carlo_sample_snr_by_user
+from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
+from latency_optimization.precoders.model_state import clone_model_state, relative_model_state_change
+from latency_optimization.results.console import format_log_line, format_progress_log_line
 
-from ..system import UplinkSystem
-
-from .network_operations import (
+from ..config import (
     RATE_BEAM_REWARD_MODE,
-    ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    _compute_r_fbl_torch,
-    _uplink_training_beam_reward_torch,
+    get_config,
+    validate_uplink_objective_mode,
+)
+from ..precoder_models import (
     build_user_precoder_net_with_blocklength_and_sigma,
     export_user_model_specs,
     export_user_model_states,
-    format_log_line,
-    format_progress_log_line,
-    get_config,
     infer_precoder_torch_with_blocklength_and_sigma,
-    validate_uplink_objective_mode,
-    with_monte_carlo_sample_snr_by_user,
+)
+from ..system import UplinkSystem
+
+from .network_operations import (
+    ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE,
+    _compute_r_fbl_torch,
+    _uplink_training_beam_reward_torch,
 )
 from .evaluator import (
     estimate_initial_random_precoder_schedule_for_scenario,
@@ -33,9 +37,7 @@ from .evaluator import (
 )
 from .rollout import (
     _build_post_training_summary,
-    _clone_model_state,
     _generate_rollout_queries_for_training_episodes,
-    _relative_model_state_change,
     _serialize_count_dict,
     _summarize_rollout_queries_by_user,
     build_training_dataset,
@@ -61,9 +63,6 @@ def train_blocklength_aware_precoder_net(
         int(epochs if epochs is not None else sim_cfg.get("monte_carlo_training_max_epochs", sim_cfg.get("max_epochs", 20))),
     )
     print_every_epoch = max(1, int(sim_cfg.get("print_every_epoch", 1)))
-    kkt_primal_tol = float(sim_cfg["kkt_primal_tol"])
-    kkt_complementarity_tol = float(sim_cfg["kkt_complementarity_tol"])
-    kkt_stationarity_tol = float(sim_cfg["kkt_stationarity_tol"])
     training_episodes = build_training_dataset(cfg_name, train_seeds)
     dataset_summary = summarize_training_dataset(training_episodes)
     beam_reward_mode = RATE_BEAM_REWARD_MODE
@@ -115,7 +114,7 @@ def train_blocklength_aware_precoder_net(
     last_epoch_queries_by_user: list[list[dict[str, Any]]] = [[] for _ in range(K)]
     previous_epoch_model_states: list[dict[str, torch.Tensor] | None] = [None for _ in range(K)]
     best_training_rate = [-float("inf") for _ in range(K)]
-    best_model_states = [_clone_model_state(model) for model in user_models]
+    best_model_states = [clone_model_state(model) for model in user_models]
     best_optimizer_states = [copy.deepcopy(optimizer.state_dict()) for optimizer in optimizers]
     per_user_solve_status = ["max_epochs_reached" for _ in range(K)]
     epochs_completed = 0
@@ -272,18 +271,18 @@ def train_blocklength_aware_precoder_net(
             avg_power_violation = float(epoch_power_violation_sum / max(epoch_query_count, 1))
             epoch_r_p = float(max(max(avg_rate_violation, 0.0), max(avg_power_violation, 0.0)))
             epoch_r_c = 0.0
-            epoch_r_s = _relative_model_state_change(model, previous_epoch_model_states[int(k)])
-            previous_epoch_model_states[int(k)] = _clone_model_state(model)
+            epoch_r_s = relative_model_state_change(model, previous_epoch_model_states[int(k)])
+            previous_epoch_model_states[int(k)] = clone_model_state(model)
             if avg_rate >= best_training_rate[int(k)]:
                 best_training_rate[int(k)] = float(avg_rate)
-                best_model_states[int(k)] = _clone_model_state(model)
+                best_model_states[int(k)] = clone_model_state(model)
                 best_optimizer_states[int(k)] = copy.deepcopy(optimizer.state_dict())
 
-            epoch_status = classify_convergence(
-                KktResiduals(epoch_r_p, epoch_r_c, epoch_r_s),
-                KktTolerances(kkt_primal_tol, kkt_complementarity_tol, kkt_stationarity_tol),
+            epoch_status = convergence_status_from_config(
+                sim_cfg,
+                precoder_change=epoch_r_s,
                 has_previous_state=epoch > 0,
-                constraints_enabled=False,
+                residuals=KktResiduals(epoch_r_p, epoch_r_c, epoch_r_s),
             )
             if epoch_status != "running":
                 per_user_solve_status[int(k)] = epoch_status
@@ -305,7 +304,7 @@ def train_blocklength_aware_precoder_net(
             if (
                 ((epoch + 1) % print_every_epoch) == 0
                 or epoch == 0
-                or epoch_status == "objective_stationary"
+                or epoch_status != "running"
             ):
                 print(
                     format_progress_log_line(
@@ -335,7 +334,12 @@ def train_blocklength_aware_precoder_net(
             float(np.mean(epoch_power_violations)) if epoch_power_violations else 0.0
         )
 
-        terminal_statuses = {"objective_stationary", "no_rollout_queries"}
+        terminal_statuses = {
+            "objective_stationary",
+            "kkt_converged",
+            "stationary_infeasible",
+            "no_rollout_queries",
+        }
         if epoch_statuses and all(status in terminal_statuses for status in epoch_statuses):
             break
 

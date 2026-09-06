@@ -7,6 +7,7 @@ from latency_optimization.experiments.configuration import (
     build_monte_carlo_sampling_settings,
     load_config_document,
 )
+from latency_optimization.optimization.stopping import CONVERGENCE_STOPPING_RULES
 from latency_optimization.physics.rate_law import resolve_rate_law
 
 from .system_parameters import initialize_system_params
@@ -20,6 +21,10 @@ ALLOWED_SIMULATION_KEYS = {
     "lr_net",
     "print_every_epoch",
     "precoder_change_tolerance",
+    "convergence_stopping_rule",
+    "kkt_primal_tolerance",
+    "kkt_complementarity_tolerance",
+    "kkt_stationarity_tolerance",
     "monte_carlo_train_seeds",
     "monte_carlo_num_training_channels",
     "monte_carlo_num_training_blocks",
@@ -150,6 +155,14 @@ def get_config(cfg_name: str) -> tuple[dict, dict]:
         ),
         **monte_carlo_settings,
         "precoder_change_tolerance": float(sim_cfg["precoder_change_tolerance"]),
+        "convergence_stopping_rule": require_choice(
+            sim_cfg["convergence_stopping_rule"],
+            CONVERGENCE_STOPPING_RULES,
+            "convergence_stopping_rule",
+        ),
+        "kkt_primal_tolerance": float(sim_cfg["kkt_primal_tolerance"]),
+        "kkt_complementarity_tolerance": float(sim_cfg["kkt_complementarity_tolerance"]),
+        "kkt_stationarity_tolerance": float(sim_cfg["kkt_stationarity_tolerance"]),
         "reduced_n_kl_log_interval": 1,
         "uplink_rate_model": uplink_rate_model,
         "finite_blocklength_rate_law": rate_law_name,

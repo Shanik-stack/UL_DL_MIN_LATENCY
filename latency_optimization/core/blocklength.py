@@ -7,6 +7,7 @@ from .validation import require_choice
 
 N_SEARCH_DIRECTIONS = {"ascending", "descending"}
 N_SEARCH_STRATEGIES = {"fixed_step", "coarse_to_fine", "exponential", "binary"}
+MONTE_CARLO_SEARCH_PHASES = {"training", "testing"}
 
 
 def validate_n_search_direction(value: Any) -> str:
@@ -48,6 +49,51 @@ def build_n_search_config(
         "coarse_step": coarse_step_int,
         "exponential_factor": exponential_factor_int,
     }
+
+
+def build_monte_carlo_n_search_config(
+    simulation: dict[str, Any],
+    *,
+    n_min: int,
+    n_max: int,
+    phase: str,
+) -> dict[str, int | str]:
+    """Resolve the shared Monte Carlo blocklength-search policy."""
+    resolved_phase = require_choice(phase, MONTE_CARLO_SEARCH_PHASES, "monte_carlo_search_phase")
+    fine_step = int(simulation["n_kl_step"])
+    if resolved_phase == "training":
+        return build_n_search_config(
+            n_min=n_min,
+            n_max=n_max,
+            fine_step=fine_step,
+            direction=simulation.get("n_search_direction", "descending"),
+            strategy=simulation.get("n_search_strategy", "fixed_step"),
+            coarse_step=simulation.get("n_search_coarse_step", fine_step),
+            exponential_factor=simulation.get("n_search_exponential_factor", 2),
+            allow_only_fixed_step=True,
+        )
+
+    return build_n_search_config(
+        n_min=n_min,
+        n_max=n_max,
+        fine_step=fine_step,
+        direction=simulation.get(
+            "monte_carlo_test_n_search_direction",
+            simulation.get("n_search_direction", "descending"),
+        ),
+        strategy=simulation.get(
+            "monte_carlo_test_n_search_strategy",
+            simulation.get("n_search_strategy", "fixed_step"),
+        ),
+        coarse_step=simulation.get(
+            "monte_carlo_test_n_search_coarse_step",
+            simulation.get("n_search_coarse_step", fine_step),
+        ),
+        exponential_factor=simulation.get(
+            "monte_carlo_test_n_search_exponential_factor",
+            simulation.get("n_search_exponential_factor", 2),
+        ),
+    )
 
 
 def _descending_candidates(n_min: int, n_max: int, step: int) -> list[int]:

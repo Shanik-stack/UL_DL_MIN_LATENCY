@@ -1,120 +1,85 @@
 # Code Organization
 
-All executable Python source belongs to the `latency_optimization` package.
-Configuration, generated data, documentation, and tests remain outside the
-package so simulation code cannot accidentally depend on artifacts.
-
-Configuration ownership is explicit: `configs/experiments/` holds complete
-runs, `configs/benchmarks/` holds small validation-only systems, and
-`configs/batch_runs/` holds launch manifests.
-
-## Execution Flow
-
-Every supported command enters through `latency_optimization/__main__.py`:
-
-```text
-command line
-  -> link and method runner
-  -> scenario construction
-  -> solver or Monte Carlo trainer/evaluator
-  -> uplink/downlink physical system
-  -> result metrics, plots, and persistence
-```
-
-The method `main.py` modules only parse method-specific arguments and
-orchestrate a run. Mathematical optimization stays in `objective.py`,
-`solver.py`, and `allocation.py`.
-
-## Package Layout
+All executable source is in `latency_optimization`. Configuration, generated
+channels, results, and documentation sit outside that package. A method never
+imports plots, saved results, or command-line code.
 
 ```text
 latency_optimization/
-  __main__.py
-  project.py
-  cli/
-    batch.py
-  core/
-    blocklength.py
-    scenarios.py
-  experiments/
-    channels.py
-    cost.py
-    determinism.py
-    monte_carlo_testing.py
-    seeds.py
-  results/
-    console.py
-    naming.py
-    paths.py
-    persistence.py
+  core/            scenario rules, validation, and n-search
+  physics/         finite-blocklength rate laws
+  precoders/       shared complex-parameter and power operations
+  optimization/    convergence diagnostics and stopping rules
+  experiments/     seed, channel, cost, and test-dataset infrastructure
+  results/         shared metrics, plots, names, paths, and persistence
   uplink/
-    config.py
-    system.py
-    system_parameters.py
-    precoder_models.py
-    simulation.py
-    reporting.py
-    plotting.py
-    convergence/
-    monte_carlo/
-    benchmarks/
+    objective.py   uplink FBL objective
+    convergence/   online precoder optimization and allocation
+    monte_carlo/   rollout, trainer, evaluator
+    benchmarks/    ZF, RZF, and exhaustive validation
   downlink/
-    config.py
-    system.py
-    precoder_models.py
-    user_weights.py
-    runner.py
-    plotting.py
-    convergence/
-    monte_carlo/
-    benchmarks/
+    objective.py   downlink FBL objective
+    precoders/     MLP models, inference, and checkpoints
+    convergence/   joint BS optimization and allocation
+    monte_carlo/   rollout, trainer, evaluator
+    benchmarks/    ZF and RZF evaluation
 ```
 
-## Responsibilities
+## Ownership
 
-| Package | Responsibility |
-| --- | --- |
-| `core` | Scenario semantics and blocklength search shared by both links |
-| `experiments` | Seeds, channel datasets, deterministic execution, and cost accounting |
-| `results` | Output paths, stable result names, serialization, and terminal formatting |
-| `uplink` | Uplink channel model, rate model, precoders, methods, and figures |
-| `downlink` | Downlink channel model, precoders, weighting, methods, and figures |
-| `cli` | Batch execution only; no physical-layer or optimization equations |
+`physics/rate_law.py` is the only finite-blocklength rate-law registry.
+`precoders/` owns complex parameter conversion and power projection.
+It also owns framework-neutral model checkpoint and parameter-change handling.
+`uplink/objective.py` and `downlink/objective.py` own link-specific rates and
+losses. `convergence/solver.py` improves a beam; `allocation.py` decides
+payload bits and `n_kl`. Monte Carlo `rollout.py` selects visited states,
+`trainer.py` updates network weights, and `evaluator.py` runs held-out
+schedules.
 
-## Method Layout
+`optimization/stopping.py` owns both stopping modes:
 
-Both links use the same method boundaries:
+- `objective_stationarity` uses only relative precoder change.
+- `kkt_residuals` also requires primal, complementarity, and stationarity
+  diagnostics. Streaming configurations select this mode.
 
-| Module | Responsibility |
-| --- | --- |
-| `convergence/objective.py` | Objective and constraint definitions |
-| `convergence/solver.py` | Precoder optimization and stopping conditions |
-| `convergence/allocation.py` | Payload progression and blocklength decisions |
-| `monte_carlo/network_operations.py` | Differentiable rates, model forwards, and snapshots |
-| `monte_carlo/rollout.py` | Channel episodes and visited blocklength states |
-| `monte_carlo/trainer.py` | Offline network optimization and checkpoint selection |
-| `monte_carlo/evaluator.py` | Held-out channel scheduling and result construction |
-| `*/main.py` | CLI arguments and orchestration only |
+Every experiment configuration is strict. Labels such as `payload`,
+`streaming`, `per_user_nets`, and `bs_shared_net` have no aliases.
 
-## Dependency Rules
+`results/metrics.py` owns link-independent latency, asynchronality, and
+reference-schedule schemas. `results/plotting.py` owns plot primitives shared
+by uplink and downlink. Method evaluators calculate schedules and diagnostics;
+they do not redefine result metrics or plotting mechanics.
 
-Dependencies flow in one direction:
+`core/blocklength.py` owns every blocklength-search strategy and the shared
+Monte Carlo training/testing search configuration. Link implementations supply
+candidate evaluations but cannot redefine how candidate values are generated.
+
+## Dependency Direction
 
 ```text
-core -> link system/model -> objective -> solver -> allocation
-experiments -> rollout -> trainer/evaluator -> runner
-completed result dictionaries -> results/reporting/plotting
+core / physics / precoders
+        -> link system and objective
+        -> convergence solver or Monte Carlo rollout
+        -> allocation, evaluator, runner
+        -> results and plots
 ```
 
-Physical-system and optimization modules must not import CLI, plotting, or
-generated result files. Uplink and downlink modules must not import each other.
-There are no `sys.path` mutations or wildcard imports.
+The uplink and downlink packages do not import each other. Benchmarks may call
+the public online allocation entry point only when comparing against the same
+online scheduling rule.
 
-## User Commands
+## Extending Safely
 
-```powershell
-python -m latency_optimization run --link uplink --method convergence --cfg_name uplink_dispersion_heavy.yaml --seed 3
-python -m latency_optimization run --link downlink --method monte_carlo --cfg_name downlink_dispersion_heavy.yaml --test_seed 3
-python -m latency_optimization batch --batch_run run_all.yaml --dry_run
-python -m latency_optimization benchmark --link uplink --name rzf --cfg_name uplink_dispersion_heavy.yaml --seed 3
-```
+- Add a rate law in `physics/rate_law.py`, register it there, and select it
+  through `finite_blocklength_rate_law`.
+- Add a downlink network in `downlink/precoders/models.py` and matching
+  inference/checkpoint metadata in that package. Do not duplicate an objective
+  or evaluator.
+- Add a training strategy as a separate Monte Carlo trainer that reuses the
+  existing objective, rollout, evaluator, and result persistence layers.
+- Add a scenario in `core/scenarios.py`; both links then receive the same
+  semantics automatically.
+
+Run commands and configuration details are in
+[`HOW_TO_RUN_EXPERIMENTS.md`](../HOW_TO_RUN_EXPERIMENTS.md) and
+[`configs/parameter_guides/PARAMETER_GUIDE.md`](../configs/parameter_guides/PARAMETER_GUIDE.md).

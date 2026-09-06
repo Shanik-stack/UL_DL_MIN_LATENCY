@@ -1,0 +1,39 @@
+test:
+  K: 2
+  Nr: [3, 3]
+  Nt: [1, 1]
+  T: [4, 4]
+  B: [1, 1]
+  P: [10, 10]
+  snr_db: [4, 4]
+  fs: [15000.0, 15000.0]
+  epsilon: [1.0e-3, 1.0e-3]
+
+simulation:
+  finite_blocklength_rate_law: normal_approximation
+  convergence_precoder_update_mode: precoder_net
+  max_epochs: 2
+  lr_net: 0.01
+  print_every_epoch: 1
+  precoder_change_tolerance: 1.0e-3
+  convergence_stopping_rule: kkt_residuals
+  kkt_primal_tolerance: 1.0e-3
+  kkt_complementarity_tolerance: 1.0e-6
+  kkt_stationarity_tolerance: 1.0e-3
+  monte_carlo_num_training_blocks: 1
+  monte_carlo_training_snr_db_ranges: [[4.0, 4.0], [4.0, 4.0]]
+  monte_carlo_num_test_blocks: 1
+  monte_carlo_test_snr_db_ranges: [[4.0, 4.0], [4.0, 4.0]]
+  monte_carlo_training_max_epochs: 1
+  max_total_blocks: 2
+  uplink_rate_model: snr
+  experiment_scenario:
+    mode: streaming
+    number_of_blocks: 1
+  n_kl_range:
+    min: 1
+    step: 1
+  n_search_direction: descending
+  n_search_strategy: fixed_step
+  n_search_coarse_step: 2
+  n_search_exponential_factor: 2

@@ -1,30 +1,30 @@
 
 || ---------------- USER 0 ---------------- ||
-R_fbl: Initial [4.71978967 4.35232341] -> Final [7.430910110473633]
+R_fbl: Initial [4.71978967 4.35232341] -> Final [7.43090295791626]
 n_kl: Initial [12, 6] -> Final [11]
 N_k: Initial 18 -> Final 11
 B_tx_kl: Initial [56, 24] -> Final [80]
 Bits per symbol: Initial avg 4.444444444444445, per block [4.666666666666667, 4.0] -> Final [7.27272727]
-SNR_dB: Initial 4.6760 -> Final 6.3286
-SINR_dB: Initial -4.6916 -> Final -3.7277
+SNR_dB: Initial 4.6760 -> Final 6.8733
+SINR_dB: Initial -4.6916 -> Final -3.0226
 
 || ---------------- USER 1 ---------------- ||
-R_fbl: Initial [5.44089536 5.12487131] -> Final [7.770789623260498, 3.733196258544922]
+R_fbl: Initial [5.44089536 5.12487131] -> Final [7.962553024291992, 3.2549333572387695]
 n_kl: Initial [14, 10] -> Final [14, 4]
 N_k: Initial 24 -> Final 18
-B_tx_kl: Initial [76, 44] -> Final [108, 12]
-Bits per symbol: Initial avg 5.0, per block [5.428571428571429, 4.4] -> Final [7.71428571 3.        ]
-SNR_dB: Initial 5.0245 -> Final 5.8215
-SINR_dB: Initial -3.0125 -> Final -3.4776
+B_tx_kl: Initial [76, 44] -> Final [111, 9]
+Bits per symbol: Initial avg 5.0, per block [5.428571428571429, 4.4] -> Final [7.92857143 2.25      ]
+SNR_dB: Initial 5.0245 -> Final 5.8898
+SINR_dB: Initial -3.0125 -> Final -3.9613
 
 || ---------------- USER 2 ---------------- ||
-R_fbl: Initial [6.3559453  5.36991052] -> Final [8.825796127319336, 5.238731384277344]
+R_fbl: Initial [6.3559453  5.36991052] -> Final [8.825777053833008, 5.23875617980957]
 n_kl: Initial [16, 11] -> Final [16, 5]
 N_k: Initial 27 -> Final 21
 B_tx_kl: Initial [101, 59] -> Final [141, 19]
 Bits per symbol: Initial avg 5.925925925925926, per block [6.3125, 5.363636363636363] -> Final [8.8125 3.8   ]
-SNR_dB: Initial 5.0880 -> Final 5.9287
-SINR_dB: Initial -3.3526 -> Final -3.3871
+SNR_dB: Initial 5.0880 -> Final 6.6195
+SINR_dB: Initial -3.3526 -> Final -2.9687
 
 Initial latency per user:
 [0.0012 0.0016 0.0018]

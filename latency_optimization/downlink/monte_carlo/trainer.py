@@ -7,25 +7,29 @@ import numpy as np
 import torch
 
 from latency_optimization.runtime import DEVICE
-from latency_optimization.optimization.stopping import KktResiduals, KktTolerances, classify_convergence
+from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
+from latency_optimization.precoders.model_state import (
+    clone_model_states,
+    relative_models_state_change,
+    restore_model_states,
+)
+from latency_optimization.results.console import format_log_line, format_progress_log_line
 
-from .network_operations import (
-    _build_training_user_models,
-    _clone_model_states,
-    _relative_model_state_change,
-    validate_shared_bs_streaming_blocklength_input_mode,
-    _restore_model_states,
-    _scenario_forward_pass,
-    _scenario_objective_weights,
-    _unique_trainable_parameters,
-    build_precoder_net_artifact,
-    format_log_line,
-    format_progress_log_line,
+from ..objective import (
     objective_display_name,
     objective_weight_strategy_name,
     validate_convergence_objective_mode,
     validate_convergence_priority_weight_strategy,
-    validate_downlink_precoder_net_scope,
+)
+from ..config import validate_shared_bs_streaming_blocklength_input_mode
+from ..precoders.models import validate_downlink_precoder_net_scope
+
+from .network_operations import (
+    _build_training_user_models,
+    _scenario_forward_pass,
+    _scenario_objective_weights,
+    _unique_trainable_parameters,
+    build_precoder_net_artifact,
 )
 from .rollout import (
     _generate_rollout_queries_for_downlink,
@@ -99,9 +103,6 @@ def train_blocklength_aware_precoder_net(
     ]
     max_epochs = max(1, int(epochs if epochs is not None else sim_params["monte_carlo_training_max_epochs"]))
     print_every = max(1, int(sim_params["print_every_epoch"]))
-    kkt_primal_tol = float(sim_params["kkt_primal_tol"])
-    kkt_complementarity_tol = float(sim_params["kkt_complementarity_tol"])
-    kkt_stationarity_tol = float(sim_params["kkt_stationarity_tol"])
     if verbose:
         print(
             format_log_line(
@@ -129,7 +130,7 @@ def train_blocklength_aware_precoder_net(
     previous_epoch_model_states: list[dict[str, torch.Tensor]] | None = None
     best_training_objective = -float("inf")
     best_training_epoch = 0
-    best_training_model_states = _clone_model_states(models)
+    best_training_model_states = clone_model_states(models)
     best_training_optimizer_state = copy.deepcopy(optimizer.state_dict())
     solve_status = "max_epochs_reached"
     epochs_completed = 0
@@ -320,19 +321,19 @@ def train_blocklength_aware_precoder_net(
         training_history["weighted_rate_objective"].append(epoch_weighted_rate_objective)
         epoch_r_p = float(max(max(epoch_rate_violations, default=0.0), max(avg_block_power_violation, 0.0)))
         epoch_r_c = 0.0
-        epoch_r_s = _relative_model_state_change(models, previous_epoch_model_states)
-        previous_epoch_model_states = _clone_model_states(models)
+        epoch_r_s = relative_models_state_change(models, previous_epoch_model_states)
+        previous_epoch_model_states = clone_model_states(models)
         if epoch_weighted_rate_objective >= best_training_objective:
             best_training_objective = float(epoch_weighted_rate_objective)
             best_training_epoch = int(epoch + 1)
-            best_training_model_states = _clone_model_states(models)
+            best_training_model_states = clone_model_states(models)
             best_training_optimizer_state = copy.deepcopy(optimizer.state_dict())
 
-        epoch_status = classify_convergence(
-            KktResiduals(epoch_r_p, epoch_r_c, epoch_r_s),
-            KktTolerances(kkt_primal_tol, kkt_complementarity_tol, kkt_stationarity_tol),
+        epoch_status = convergence_status_from_config(
+            sim_params,
+            precoder_change=epoch_r_s,
             has_previous_state=epoch > 0,
-            constraints_enabled=False,
+            residuals=KktResiduals(epoch_r_p, epoch_r_c, epoch_r_s),
         )
         if epoch_status != "running":
             solve_status = epoch_status
@@ -344,7 +345,7 @@ def train_blocklength_aware_precoder_net(
             if (
                 ((epoch + 1) % print_every) == 0
                 or epoch == 0
-                or epoch_status == "objective_stationary"
+                or epoch_status != "running"
             ):
                 print(
                     format_progress_log_line(
@@ -362,10 +363,10 @@ def train_blocklength_aware_precoder_net(
                         status=epoch_status,
                     )
                 )
-        if epoch_status == "objective_stationary":
+        if epoch_status != "running":
             break
 
-    _restore_model_states(models, best_training_model_states)
+    restore_model_states(models, best_training_model_states)
     optimizer.load_state_dict(best_training_optimizer_state)
     restored_solution_source = "highest_training_weighted_rate"
     if solve_status == "max_epochs_reached":

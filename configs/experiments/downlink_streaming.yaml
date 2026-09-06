@@ -21,6 +21,10 @@ simulation:
   user_update_lr: 0.001
   print_every_epoch: 5
   precoder_change_tolerance: 1.0e-3
+  convergence_stopping_rule: kkt_residuals
+  kkt_primal_tolerance: 1.0e-3
+  kkt_complementarity_tolerance: 1.0e-6
+  kkt_stationarity_tolerance: 1.0e-3
 
   # Streaming Monte Carlo uses each seed as one independent training block.
   monte_carlo_num_training_blocks: 11

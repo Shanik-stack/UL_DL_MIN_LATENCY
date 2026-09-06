@@ -1,0 +1,112 @@
+Uplink optimizer summary
+
+Setup
+Method: monte_carlo_precoder_net_train_test
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\uplink_streaming.yaml
+Test seed: 991
+Train seeds: [990]
+Run started at: 2026-09-06T22:03:36+03:00
+Run completed at: 2026-09-06T22:04:03+03:00
+Scenario: streaming
+Uplink rate model: snr
+Uplink objective mode: unweighted_sum_rate
+Beam reward mode: rate
+Precoder parameterization: shared_user_channel_n_sigma_epsilon_to_precoder_mlp
+Training objective: scenario_driven_episode_rollout_objective_unweighted_sum_rate_user_rate
+Monte Carlo training style: rollout_query_objective
+Test n search strategy: fixed_step
+Test n search direction: descending
+Initial schedule source: random_precoder_baseline
+Training dataset sample kind: streaming_block
+Training dataset sample unit: block
+Training dataset total samples: 1
+Training SNR ranges by user (dB): [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+Training sample counts per user: [1, 1, 1]
+
+Final test results
+Initial total latency (random baseline): 0.002800
+Final total latency: 0.002800
+Latency reduction vs random precoder baseline (%): 0.0000
+Initial avg latency (random baseline): 0.000933
+Final avg latency: 0.000933
+Initial asynchronality sum (random baseline): 0.000533
+Final asynchronality sum: 0.000533
+Asynchronality reduction (%): 0.0000
+Initial avg served-user SNR (dB): 3.8804
+Final avg served-user SNR (dB): 3.1547
+Initial avg served-user SINR (dB): -3.8370
+Final avg served-user SINR (dB): -4.0530
+Final served-block avg capacity C: 10.835174
+Final served-block avg dispersion V: 6.883072
+Final served-block avg finite-blocklength penalty: 5.394855
+Final served-block avg penalty/C ratio: 0.497515
+Total served bits: 226
+Total skipped blocks: 0
+Initial total latency (naive full-T baseline): 0.002800
+Latency reduction vs naive full-T baseline (%): 0.0000
+Total target bits: 360
+Total unserved bits: 134
+Overall delivery ratio: 0.627778
+Total partially served blocks: 3
+Total zero-service blocks: 0
+
+Training results
+Epochs requested: 1
+Configured max epochs: 1
+Per-user epochs completed: [1, 1, 1]
+Per-user training solve status: ['max_epochs_best_training_rate', 'max_epochs_best_training_rate', 'max_epochs_best_training_rate']
+Training sample unit: block
+Base training dataset: streaming_block
+Training samples: 1
+Monte Carlo training style: rollout_query_objective
+Rollout anchor-bits mode: derived_online_from_current_episode_served_bits
+Last epoch mean per-user rollout rate: 2.529850
+Best epoch mean per-user rollout rate: 2.529850
+Last epoch mean per-user objective loss: -2.529850
+Best epoch mean per-user objective loss: -2.529850
+Per-user last epoch avg rate over rollout queries: [2.066267967224121, 1.2648506164550781, 4.2584309577941895]
+Per-user last epoch avg objective loss over rollout queries: [-2.066267967224121, -1.2648506164550781, -4.2584309577941895]
+Last epoch feasible rollout queries: 3 / 3
+
+Per-user final test details
+User 0 | init_lat=0.000800 | final_lat=0.000800 | lat_red_vs_random=0.0000% | init_snr=3.7525 dB | final_snr=4.7126 dB | init_sinr=-3.9931 dB | final_sinr=-1.7634 dB | blocks=1 | total_n=12 | served_bits=67 | skipped_blocks=0 | lat_red_vs_fullT=0.0000% | target_bits=80 | init_unserved_bits=20 | unserved_bits=13 | delivery_ratio=0.837500 | successful_blocks=0 | deadline_miss_fraction=1.000000 | avg_n_kl=12.0000 | partial_blocks=1 | zero_service_blocks=0
+User 1 | init_lat=0.000933 | final_lat=0.000933 | lat_red_vs_random=0.0000% | init_snr=3.8709 dB | final_snr=1.4419 dB | init_sinr=-3.1719 dB | final_sinr=-5.7913 dB | blocks=1 | total_n=14 | served_bits=69 | skipped_blocks=0 | lat_red_vs_fullT=0.0000% | target_bits=120 | init_unserved_bits=51 | unserved_bits=51 | delivery_ratio=0.575000 | successful_blocks=0 | deadline_miss_fraction=1.000000 | avg_n_kl=14.0000 | partial_blocks=1 | zero_service_blocks=0
+User 2 | init_lat=0.001067 | final_lat=0.001067 | lat_red_vs_random=0.0000% | init_snr=4.0178 dB | final_snr=3.3096 dB | init_sinr=-4.3460 dB | final_sinr=-4.6042 dB | blocks=1 | total_n=16 | served_bits=90 | skipped_blocks=0 | lat_red_vs_fullT=0.0000% | target_bits=160 | init_unserved_bits=60 | unserved_bits=70 | delivery_ratio=0.562500 | successful_blocks=0 | deadline_miss_fraction=1.000000 | avg_n_kl=16.0000 | partial_blocks=1 | zero_service_blocks=0
+
+Per-pair asynchronality
+Users 0-1 | initial_diff=0.000133 | final_diff=0.000133
+Users 0-2 | initial_diff=0.000267 | final_diff=0.000267
+Users 1-2 | initial_diff=0.000133 | final_diff=0.000133
+
+Additional training details
+Cumulative rollout queries by n_kl: {'12': 1, '14': 1, '16': 1}
+Cumulative frontier rollout queries by n_kl: {}
+Train-eval initial blocks per user: [1, 1, 1]
+Train-eval final blocks per user: [1, 1, 1]
+Train-eval initial total n per user: [12, 14, 16]
+Train-eval final total n per user: [12, 14, 16]
+Train-eval total latency reduction (%): 0.0000
+Train-eval initial selected n_kl summary: {'global_selected_examples_by_n_kl': {'12': 1, '14': 1, '16': 1}, 'per_user': [{'user': 0, 'selected_examples_by_n_kl': {'12': 1}}, {'user': 1, 'selected_examples_by_n_kl': {'14': 1}}, {'user': 2, 'selected_examples_by_n_kl': {'16': 1}}]}
+Train-eval final selected n_kl summary: {'global_selected_examples_by_n_kl': {'12': 1, '14': 1, '16': 1}, 'per_user': [{'user': 0, 'selected_examples_by_n_kl': {'12': 1}}, {'user': 1, 'selected_examples_by_n_kl': {'14': 1}}, {'user': 2, 'selected_examples_by_n_kl': {'16': 1}}]}
+
+Experiment cost
+Core wall time total (s): 1.599760
+Core wall time training (s): 1.573361
+Testing-phase wall time (s): 0.026399
+Forward+backward NN FLOPs: 1.386e+06
+Forward-only NN FLOPs: 4.620e+05
+Total NN FLOPs: 1.848e+06
+Forward+backward NN evaluations: 3
+Forward-only NN evaluations: 3
+Optimizer steps: 3
+Workload counters:
+{'training_rollout_queries_per_user': [1, 1, 1], 'train_eval_candidate_n_states_per_user': [1, 1, 1], 'batch_size': 1, 'test_candidate_n_states_per_user': [1, 1, 1], 'test_forward_calls_per_user': [0, 0, 0], 'test_total_forward_calls': 0}
+Notes:
+- Training FLOPs are estimated from rollout-query counts and precoder MLP shapes.
+- Testing-phase wall time measures only the held-out uplink precoder-net evaluation; plotting, file export, and baseline reconstruction are excluded.
+- Inference forward calls include both the post-training train-eval pass and the held-out test pass.
+
+Terminology
+- channel episode: one (seed, user, block=0) channel realization stored in the base dataset
+- rollout query: one visited (episode, n_kl) state generated online from the current precoder net
+- initial schedule: the random-precoder baseline used for the before-optimization uplink latency
