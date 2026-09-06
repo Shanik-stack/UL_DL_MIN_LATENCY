@@ -1,0 +1,5 @@
+flowchart TD
+    A["Active users and channel/noise values"] --> B["Compute each user's CNR"]
+    B --> C["Normalize inverse-CNR weights"]
+    C --> D["Maximize sum of weighted FBL rates"]
+    D --> E["Allocate payload bits after the beam is evaluated"]

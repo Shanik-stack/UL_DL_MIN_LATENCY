@@ -1,0 +1,1 @@
+"""Shared communication-domain rules."""

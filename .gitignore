@@ -1,0 +1,9 @@
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.json
+UL_RSMA_min_latency/
+PDF_Reports/

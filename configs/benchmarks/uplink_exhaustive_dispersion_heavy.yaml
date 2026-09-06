@@ -1,0 +1,38 @@
+test:
+  K: 2
+  Nr: [8, 8]
+  Nt: [4, 4]
+  T: [5, 6]
+  B: [6, 7]
+  P: [30, 30]
+  snr_db: [4, 4]
+  fs: [15000.0, 15000.0]
+  epsilon: [1.0e-14, 1.0e-14]
+
+simulation:
+  finite_blocklength_rate_law: normal_approximation
+  convergence_precoder_update_mode: direct_precoder
+  max_epochs: 20
+  lr_net: 0.02
+  print_every_epoch: 10
+  precoder_change_tolerance: 1.0e-3
+  max_total_blocks: 2
+  uplink_rate_model: snr
+
+  experiment_scenario:
+    mode: payload
+    payload_bits_source: system_B
+
+  n_kl_range:
+    min: 1
+    step: 1
+  n_search_direction: descending
+  n_search_strategy: fixed_step
+  n_search_coarse_step: 2
+  n_search_exponential_factor: 2
+
+  exhaustive_compare:
+    max_blocks: 2
+    allow_block_skip: true
+    suppress_inner_logs: true
+    catalog_detail_mode: full

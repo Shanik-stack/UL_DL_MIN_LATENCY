@@ -1,0 +1,48 @@
+test:
+  K: 3
+  Nr: [16, 16, 16]
+  Nt: [4, 4, 4]
+  T: [12, 14, 16]
+  # In streaming mode, B[k] is the fresh bit target for user k in every block.
+  B: [80, 120, 160]
+  P: [30, 30, 30]
+  snr_db: [4, 4, 4]
+  fs: [15000.0, 15000.0, 15000.0]
+  epsilon: [1.0e-14, 1.0e-14, 1.0e-14]
+
+simulation:
+  finite_blocklength_rate_law: normal_approximation
+  convergence_precoder_update_mode: precoder_net
+  max_epochs: 120
+  lr_net: 0.01
+  print_every_epoch: 5
+  precoder_change_tolerance: 1.0e-3
+
+  # Streaming Monte Carlo uses each seed as one independent training block.
+  monte_carlo_num_training_blocks: 11
+  monte_carlo_training_snr_db_ranges:
+    - [0.0, 8.0]
+    - [0.0, 8.0]
+    - [0.0, 8.0]
+  monte_carlo_num_test_blocks: 11
+  monte_carlo_test_snr_db_ranges:
+    - [0.0, 8.0]
+    - [0.0, 8.0]
+    - [0.0, 8.0]
+  monte_carlo_training_max_epochs: 100
+
+  max_total_blocks: 256
+  uplink_rate_model: snr
+  experiment_scenario:
+    mode: streaming
+    # Used by convergence runs. Monte Carlo treats each seed as one block
+    # sample and does not multiply it by this horizon.
+    number_of_blocks: 10
+
+  n_kl_range:
+    min: 1
+    step: 1
+  n_search_direction: descending
+  n_search_strategy: fixed_step
+  n_search_coarse_step: 2
+  n_search_exponential_factor: 2

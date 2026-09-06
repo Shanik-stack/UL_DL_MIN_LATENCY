@@ -1,0 +1,46 @@
+Uplink dispersion diagnostics
+
+Terms
+Capacity C: realized-block conditional capacity used by the simulator.
+Dispersion V: realized-block conditional dispersion term used by the simulator.
+Finite-blocklength penalty: C - R_fbl for the accepted served block.
+Penalty/C ratio: fraction of realized capacity removed by the finite-blocklength penalty.
+
+Accepted served blocks: 30
+Average capacity C: 14.591228
+Average dispersion V: 7.574001
+Average finite-blocklength penalty: 5.876842
+Average penalty/C ratio: 0.402584
+Maximum penalty/C ratio: 0.463356
+
+Per accepted block
+user=0 | block=0 | served_bits=80 | n_kl=11 | C=14.349533 | V=8.182957 | penalty=6.598756 | penalty_over_C=0.459859 | achieved_R_fbl=7.750778 | required_rate=7.272727 | margin=0.478050
+user=0 | block=1 | served_bits=80 | n_kl=10 | C=15.066800 | V=8.265464 | penalty=6.955632 | penalty_over_C=0.461653 | achieved_R_fbl=8.111168 | required_rate=8.000000 | margin=0.111168
+user=0 | block=2 | served_bits=80 | n_kl=10 | C=16.057469 | V=8.273111 | penalty=6.958846 | penalty_over_C=0.433371 | achieved_R_fbl=9.098623 | required_rate=8.000000 | margin=1.098623
+user=0 | block=3 | served_bits=80 | n_kl=9 | C=16.422682 | V=8.271064 | penalty=7.334349 | penalty_over_C=0.446599 | achieved_R_fbl=9.088333 | required_rate=8.888889 | margin=0.199444
+user=0 | block=4 | served_bits=80 | n_kl=10 | C=16.104810 | V=8.277252 | penalty=6.960585 | penalty_over_C=0.432205 | achieved_R_fbl=9.144225 | required_rate=8.000000 | margin=1.144225
+user=0 | block=5 | served_bits=80 | n_kl=11 | C=14.286297 | V=8.234872 | penalty=6.619645 | penalty_over_C=0.463356 | achieved_R_fbl=7.666652 | required_rate=7.272727 | margin=0.393924
+user=0 | block=6 | served_bits=80 | n_kl=9 | C=16.784169 | V=8.270295 | penalty=7.334004 | penalty_over_C=0.436960 | achieved_R_fbl=9.450165 | required_rate=8.888889 | margin=0.561276
+user=0 | block=7 | served_bits=80 | n_kl=9 | C=16.606153 | V=8.286170 | penalty=7.341056 | penalty_over_C=0.442068 | achieved_R_fbl=9.265097 | required_rate=8.888889 | margin=0.376208
+user=0 | block=8 | served_bits=80 | n_kl=10 | C=16.098148 | V=8.283777 | penalty=6.963317 | penalty_over_C=0.432554 | achieved_R_fbl=9.134830 | required_rate=8.000000 | margin=1.134830
+user=0 | block=9 | served_bits=80 | n_kl=9 | C=16.953433 | V=8.283470 | penalty=7.339854 | penalty_over_C=0.432942 | achieved_R_fbl=9.613579 | required_rate=8.888889 | margin=0.724690
+user=1 | block=0 | served_bits=108 | n_kl=14 | C=12.872154 | V=6.224428 | penalty=5.101374 | penalty_over_C=0.396311 | achieved_R_fbl=7.770779 | required_rate=7.714286 | margin=0.056493
+user=1 | block=1 | served_bits=114 | n_kl=14 | C=13.279888 | V=6.228201 | penalty=5.102937 | penalty_over_C=0.384261 | achieved_R_fbl=8.176950 | required_rate=8.142857 | margin=0.034093
+user=1 | block=2 | served_bits=99 | n_kl=14 | C=12.215295 | V=6.218175 | penalty=5.098818 | penalty_over_C=0.417413 | achieved_R_fbl=7.116477 | required_rate=7.071429 | margin=0.045048
+user=1 | block=3 | served_bits=106 | n_kl=14 | C=12.685040 | V=6.219417 | penalty=5.099323 | penalty_over_C=0.401995 | achieved_R_fbl=7.585716 | required_rate=7.571429 | margin=0.014288
+user=1 | block=4 | served_bits=93 | n_kl=14 | C=11.748053 | V=6.214233 | penalty=5.097202 | penalty_over_C=0.433876 | achieved_R_fbl=6.650851 | required_rate=6.642857 | margin=0.007994
+user=1 | block=5 | served_bits=118 | n_kl=14 | C=13.573450 | V=6.226997 | penalty=5.102440 | penalty_over_C=0.375913 | achieved_R_fbl=8.471010 | required_rate=8.428571 | margin=0.042439
+user=1 | block=6 | served_bits=105 | n_kl=14 | C=12.634053 | V=6.224950 | penalty=5.101600 | penalty_over_C=0.403798 | achieved_R_fbl=7.532454 | required_rate=7.500000 | margin=0.032454
+user=1 | block=7 | served_bits=120 | n_kl=14 | C=13.903932 | V=6.231307 | penalty=5.104192 | penalty_over_C=0.367104 | achieved_R_fbl=8.799740 | required_rate=8.571429 | margin=0.228311
+user=1 | block=8 | served_bits=105 | n_kl=14 | C=12.662320 | V=6.218551 | penalty=5.098969 | penalty_over_C=0.402688 | achieved_R_fbl=7.563350 | required_rate=7.500000 | margin=0.063350
+user=1 | block=9 | served_bits=102 | n_kl=14 | C=12.391977 | V=6.222676 | penalty=5.100670 | penalty_over_C=0.411611 | achieved_R_fbl=7.291307 | required_rate=7.285714 | margin=0.005593
+user=2 | block=0 | served_bits=146 | n_kl=16 | C=14.599084 | V=8.147140 | penalty=5.459409 | penalty_over_C=0.373956 | achieved_R_fbl=9.139675 | required_rate=9.125000 | margin=0.014675
+user=2 | block=1 | served_bits=154 | n_kl=16 | C=15.122524 | V=8.225155 | penalty=5.485474 | penalty_over_C=0.362735 | achieved_R_fbl=9.637051 | required_rate=9.625000 | margin=0.012051
+user=2 | block=2 | served_bits=135 | n_kl=16 | C=13.928285 | V=8.220068 | penalty=5.483780 | penalty_over_C=0.393715 | achieved_R_fbl=8.444506 | required_rate=8.437500 | margin=0.007006
+user=2 | block=3 | served_bits=142 | n_kl=16 | C=14.379683 | V=8.230880 | penalty=5.487398 | penalty_over_C=0.381608 | achieved_R_fbl=8.892285 | required_rate=8.875000 | margin=0.017285
+user=2 | block=4 | served_bits=154 | n_kl=16 | C=15.150100 | V=8.225096 | penalty=5.485459 | penalty_over_C=0.362074 | achieved_R_fbl=9.664640 | required_rate=9.625000 | margin=0.039640
+user=2 | block=5 | served_bits=153 | n_kl=16 | C=15.096461 | V=8.240284 | penalty=5.490532 | penalty_over_C=0.363697 | achieved_R_fbl=9.605929 | required_rate=9.562500 | margin=0.043429
+user=2 | block=6 | served_bits=160 | n_kl=16 | C=16.021974 | V=8.285948 | penalty=5.505719 | penalty_over_C=0.343635 | achieved_R_fbl=10.516255 | required_rate=10.000000 | margin=0.516255
+user=2 | block=7 | served_bits=160 | n_kl=16 | C=16.219745 | V=8.290807 | penalty=5.507323 | penalty_over_C=0.339544 | achieved_R_fbl=10.712421 | required_rate=10.000000 | margin=0.712421
+user=2 | block=8 | served_bits=159 | n_kl=16 | C=15.476520 | V=8.251404 | penalty=5.494219 | penalty_over_C=0.355004 | achieved_R_fbl=9.982301 | required_rate=9.937500 | margin=0.044801
+user=2 | block=9 | served_bits=152 | n_kl=16 | C=15.046797 | V=8.245892 | penalty=5.492390 | penalty_over_C=0.365021 | achieved_R_fbl=9.554407 | required_rate=9.500000 | margin=0.054407

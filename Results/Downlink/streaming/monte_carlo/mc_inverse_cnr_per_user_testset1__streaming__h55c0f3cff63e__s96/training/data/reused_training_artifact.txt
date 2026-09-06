@@ -1,0 +1,5 @@
+This Monte Carlo run reused an existing training artifact and reran only the test phase.
+Source artifact: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\Results\Downlink\streaming\monte_carlo\mc_inverse_cnr_per_user_testset1__streaming__h55c0f3cff63e__s94\training\data\train_artifact.pt
+Train seeds: [1]
+Test seed: 96
+Test n-search overrides: {}

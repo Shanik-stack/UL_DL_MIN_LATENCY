@@ -1,0 +1,67 @@
+Run manifest
+
+Setup
+link: Downlink
+method: Monte Carlo
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\configs\experiments\downlink_streaming.yaml
+config_hash: 55c0f3cff63e
+train_seeds: [1]
+test_seed: 96
+test_seeds: [96]
+training_artifact_reused: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\Results\Downlink\streaming\monte_carlo\mc_inverse_cnr_per_user_testset1__streaming__h55c0f3cff63e__s94\training\data\train_artifact.pt
+run_started_at_local: 2026-09-06T00:40:55+03:00
+run_completed_at_local: 2026-09-06T00:41:28+03:00
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\Results\Downlink\streaming\monte_carlo\mc_inverse_cnr_per_user_testset1__streaming__h55c0f3cff63e__s96
+Files recorded: 32
+Result artifacts: 30
+Plots: 18
+Empty directories removed: 7
+Zero-byte files: 0
+
+Files by section
+- testing: 26
+- training: 4
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\blocks\manifest.json
+- testing\blocks\seed_0096.npz
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt
+- testing\samples\seed_0096\data\experiment_scenario.json
+- testing\samples\seed_0096\data\experiment_scenario.txt
+- testing\samples\seed_0096\data\result.json
+- testing\samples\seed_0096\data\summary.txt
+- testing\samples\seed_0096\interference\interference_before_after_heatmaps.png
+- testing\samples\seed_0096\interference\interference_heatmaps.png
+- testing\samples\seed_0096\interference\per_user_interference_before_after.png
+- testing\samples\seed_0096\interference\per_user_interference_profiles.png
+- testing\samples\seed_0096\latency_asynchronality\asynchronality_comparison.png
+- testing\samples\seed_0096\latency_asynchronality\latency_comparison.png
+- testing\samples\seed_0096\link_quality\link_quality.png
+- testing\samples\seed_0096\optimization_history\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- testing\samples\seed_0096\optimization_history\F_vs_n\user0_Rfbl_vs_n.png
+- testing\samples\seed_0096\optimization_history\F_vs_n\user1_Rfbl_vs_n.png
+- testing\samples\seed_0096\optimization_history\F_vs_n\user2_Rfbl_vs_n.png
+- testing\samples\seed_0096\optimization_history\blocklength_feasibility_curves.png
+- testing\samples\seed_0096\optimization_history\optimization_history.png
+- testing\samples\seed_0096\optimization_history\per_user_convergence.png
+- testing\samples\seed_0096\optimization_history\rate_violation_heatmap.png
+- testing\samples\seed_0096\schedule_details\block_plan_summary.png
+- testing\samples\seed_0096\schedule_details\per_user_schedule_details.png
+- testing\samples\seed_0096\user_config\user_config_summary.png
+
+[training]
+- training\blocks\manifest.json
+- training\blocks\seed_0001.npz
+- training\data\reused_training_artifact.json
+- training\data\reused_training_artifact.txt

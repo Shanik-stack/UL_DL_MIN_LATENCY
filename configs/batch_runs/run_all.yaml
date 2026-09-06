@@ -1,0 +1,23 @@
+defaults:
+  seed: 3
+  test_seed: 3
+  launch_mode: parallel_terminals
+
+runs:
+  - link: uplink
+    method: convergence
+    cfg_names: [uplink_dispersion_heavy.yaml, uplink_streaming.yaml]
+
+  - link: uplink
+    method: monte_carlo
+    cfg_names: [uplink_dispersion_heavy.yaml, uplink_streaming.yaml]
+
+  - link: downlink
+    method: convergence
+    cfg_names: [downlink_dispersion_heavy.yaml, downlink_streaming.yaml]
+    quiet: true
+
+  - link: downlink
+    method: monte_carlo
+    cfg_names: [downlink_dispersion_heavy.yaml, downlink_streaming.yaml]
+    quiet: true
