@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import os
 from time import perf_counter
 
@@ -23,7 +24,7 @@ from latency_optimization.results.persistence import (
     write_result_manifest,
 )
 
-from ..config import get_config, load_config, validate_uplink_objective_mode
+from ..config import load_config, validate_uplink_objective_mode
 from .solver import validate_convergence_precoder_update_mode
 from ..reporting import (
     build_convergence_result,
@@ -64,7 +65,7 @@ def run_convergence_experiment(
     plot_output_dirs: dict[str, str] | None = None,
 ) -> dict:
     run_started_at_local = current_local_timestamp()
-    system_params, sim_cfg = get_config(cfg_name)
+    system_params, sim_cfg, _ = load_config(cfg_name)
     sim_cfg = dict(sim_cfg)
     core_start = perf_counter()
 
@@ -159,6 +160,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Uplink online convergence baseline")
     parser.add_argument("--cfg_name", type=str, default="uplink_dispersion_heavy.yaml", help="Configuration file name or path")
     parser.add_argument("--seed", type=int, default=0, help="Deterministic random seed")
+    parser.add_argument("--quiet", action="store_true", help="Reduce console logging")
     args = parser.parse_args()
 
     run_seed = int(args.seed)
@@ -184,12 +186,16 @@ def main() -> None:
         result_tag,
         scenario_mode=str(sim_cfg["experiment_scenario_mode"]),
     )
-    experiment = run_convergence_experiment(
-        cfg_name=args.cfg_name,
-        seed=run_seed,
-        do_plots=True,
-        plot_output_dirs=result_dirs,
-    )
+    with contextlib.ExitStack() as stack:
+        if args.quiet:
+            output_sink = stack.enter_context(open(os.devnull, "w", encoding="utf-8"))
+            stack.enter_context(contextlib.redirect_stdout(output_sink))
+        experiment = run_convergence_experiment(
+            cfg_name=args.cfg_name,
+            seed=run_seed,
+            do_plots=True,
+            plot_output_dirs=result_dirs,
+        )
     result = experiment["result"]
     result["cfg_hash"] = run_meta.get("cfg_hash")
     report_system = experiment["report_system"]

@@ -29,14 +29,14 @@ simulation:
   # Streaming Monte Carlo uses each seed as one independent training block.
   monte_carlo_num_training_blocks: 11
   monte_carlo_training_snr_db_ranges:
-    - [0.0, 8.0]
-    - [0.0, 8.0]
-    - [0.0, 8.0]
+    - [-4.0, 2.0]
+    - [-4.0, 2.0]
+    - [-4.0, 2.0]
   monte_carlo_num_test_blocks: 11
   monte_carlo_test_snr_db_ranges:
-    - [0.0, 8.0]
-    - [0.0, 8.0]
-    - [0.0, 8.0]
+    - [-4.0, 2.0]
+    - [-4.0, 2.0]
+    - [-4.0, 2.0]
   monte_carlo_training_max_epochs: 120
 
   max_total_blocks: 256

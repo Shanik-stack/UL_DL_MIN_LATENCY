@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Any, List
 
 import numpy as np
+import torch
 
 from latency_optimization.precoders.power import (
     joint_power_scale_numpy,
     normalize_matrix_power_numpy,
 )
 from latency_optimization.physics.rate_law import RateLaw, resolve_rate_law
+from latency_optimization.physics.finite_blocklength import scalar_rate_result
+from latency_optimization.precoders.parameters import as_complex_tensor
+from latency_optimization.runtime import DEVICE
 
 
 class DownlinkSystem:
@@ -224,13 +228,15 @@ class DownlinkSystem:
         Hk = self.H[k][l]
         Fk = self.F[k][l] if F_override is None else np.asarray(F_override[k][l], dtype=np.complex128)
         noise_cov = self.get_interference_plus_noise_covariance(k, l, F_override=F_override)
-        return self.rate_law.mimo_numpy(
-            Hk,
-            Fk,
-            noise_cov,
-            int(n_kl),
-            float(self.epsilon[k]),
-        ).rate
+        with torch.no_grad():
+            result = self.rate_law.mimo(
+                as_complex_tensor(Hk, device=DEVICE),
+                as_complex_tensor(Fk, device=DEVICE),
+                as_complex_tensor(noise_cov, device=DEVICE),
+                int(n_kl),
+                float(self.epsilon[k]),
+            )
+        return scalar_rate_result(result).rate
 
     def apply_solution(self, F_new: List[List[np.ndarray]], n_kl_new: List[List[int]]) -> None:
         self.n_kl = [list(map(int, blocks)) for blocks in n_kl_new]
@@ -277,13 +283,15 @@ class DownlinkSystem:
                 Hk = self.H[k][l]
                 Fk = self.F[k][l]
                 noise_cov = self.get_interference_plus_noise_covariance(k, l)
-                rate_result = self.rate_law.mimo_numpy(
-                    Hk,
-                    Fk,
-                    noise_cov,
-                    int(n_kl),
-                    float(self.epsilon[k]),
-                )
+                with torch.no_grad():
+                    tensor_result = self.rate_law.mimo(
+                        as_complex_tensor(Hk, device=DEVICE),
+                        as_complex_tensor(Fk, device=DEVICE),
+                        as_complex_tensor(noise_cov, device=DEVICE),
+                        int(n_kl),
+                        float(self.epsilon[k]),
+                    )
+                rate_result = scalar_rate_result(tensor_result)
                 Ck.append(rate_result.capacity)
                 Vk.append(rate_result.dispersion)
                 Rk.append(rate_result.rate)

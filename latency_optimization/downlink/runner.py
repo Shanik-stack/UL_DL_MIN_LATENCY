@@ -34,7 +34,7 @@ from .config import load_config
 from .convergence.allocation import (
     optimize_downlink_transmission,
 )
-from .objective import (
+from .objective_settings import (
     get_convergence_objective_name,
 )
 from .plotting import (

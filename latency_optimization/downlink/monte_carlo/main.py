@@ -52,7 +52,7 @@ from latency_optimization.results.persistence import (
 )
 
 from ..config import load_config
-from ..objective import get_convergence_objective_name
+from ..objective_settings import get_convergence_objective_name
 from ..plotting import (
     plot_asynchronality_comparison,
     plot_blocklength_feasibility_curves,

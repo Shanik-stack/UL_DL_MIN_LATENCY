@@ -15,8 +15,8 @@ from latency_optimization.precoders.power import cap_matrix_power_torch
 from latency_optimization.results.console import format_progress_log_line
 from latency_optimization.runtime import DEVICE
 
-from ..objective import FiniteBlocklengthRateObjective
-from ..precoder_models import infer_precoder_torch_with_blocklength_and_sigma
+from ..objective import UplinkPrecoderObjective
+from ..precoders.inference import infer_precoder
 
 
 CONVERGENCE_PRECODER_UPDATE_MODES = {"precoder_net", "direct_precoder"}
@@ -36,7 +36,7 @@ def _project_precoder_power(precoder: torch.Tensor, power_limit: float) -> torch
 
 def optimize_precoder_for_nl(
     precoder_net: nn.Module | None,
-    loss_fn: FiniteBlocklengthRateObjective,
+    loss_fn: UplinkPrecoderObjective,
     Nt: int,
     dk: int,
     max_epochs: int,
@@ -70,7 +70,7 @@ def optimize_precoder_for_nl(
                 complex_tensor_from_parameter(precoder_param),
                 loss_fn.P,
             )
-        return infer_precoder_torch_with_blocklength_and_sigma(
+        return infer_precoder(
             precoder_net,
             loss_fn.H_kl,
             int(loss_fn.n_kl),
@@ -107,9 +107,14 @@ def optimize_precoder_for_nl(
     for epoch_index in range(max_epochs):
         precoder = build_precoder()
         optimizer.zero_grad()
-        loss, rate, reward, power, rate_gap, power_gap, rate_violation, power_violation = loss_fn(
-            precoder
-        )
+        objective = loss_fn(precoder)
+        loss = objective["loss"]
+        rate = objective["rate"]
+        power = objective["power"]
+        rate_gap = objective["rate_gap"]
+        power_gap = objective["power_gap"]
+        rate_violation = objective["rate_violation"]
+        power_violation = objective["power_violation"]
         loss.backward()
 
         primal_residual = max(
@@ -188,9 +193,14 @@ def optimize_precoder_for_nl(
 
     with torch.no_grad():
         final_precoder = build_precoder()
-        loss, rate, reward, power, rate_gap, power_gap, rate_violation, power_violation = loss_fn(
-            final_precoder
-        )
+        objective = loss_fn(final_precoder)
+        rate = objective["rate"]
+        reward = objective["reward"]
+        power = objective["power"]
+        rate_gap = objective["rate_gap"]
+        power_gap = objective["power_gap"]
+        rate_violation = objective["rate_violation"]
+        power_violation = objective["power_violation"]
 
     return {
         "F": final_precoder.detach(),

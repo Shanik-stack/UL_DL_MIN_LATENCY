@@ -29,7 +29,7 @@ from ..model_service import (
 from ..precoders.checkpoints import export_user_model_specs
 from ..precoders.models import validate_downlink_precoder_net_scope
 from ..system import DownlinkSystem
-from ..objective import (
+from ..objective_settings import (
     objective_display_name,
     objective_weight_strategy_name,
     validate_convergence_objective_mode,

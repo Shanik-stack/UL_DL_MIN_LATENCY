@@ -13,12 +13,14 @@ latency_optimization/
   experiments/     seed, channel, cost, and test-dataset infrastructure
   results/         shared metrics, plots, names, paths, and persistence
   uplink/
-    objective.py   uplink FBL objective
+    objective.py   `UplinkPrecoderObjective` for one user and block
+    precoders/     MLP models, Torch inference, and checkpoints
     convergence/   online precoder optimization and allocation
     monte_carlo/   rollout, trainer, evaluator
     benchmarks/    ZF, RZF, and exhaustive validation
   downlink/
-    objective.py   downlink FBL objective
+    objective.py   `DownlinkPrecoderObjective` for one coupled BS block
+    objective_settings.py  downlink objective selection and display names
     precoders/     MLP models, inference, and checkpoints
     convergence/   joint BS optimization and allocation
     monte_carlo/   rollout, trainer, evaluator
@@ -28,10 +30,18 @@ latency_optimization/
 ## Ownership
 
 `physics/rate_law.py` is the only finite-blocklength rate-law registry.
+`physics/finite_blocklength.py` contains one Torch implementation of the rate
+equation. NumPy implementations of optimization or rate equations are not
+allowed.
 `precoders/` owns complex parameter conversion and power projection.
 It also owns framework-neutral model checkpoint and parameter-change handling.
-`uplink/objective.py` and `downlink/objective.py` own link-specific rates and
-losses. `convergence/solver.py` improves a beam; `allocation.py` decides
+`uplink/objective.py` and `downlink/objective.py` expose matching
+`nn.Module` objective interfaces with named result dictionaries. The uplink
+objective evaluates one user's independent precoder; the downlink objective
+evaluates all active user slices of the joint BS precoder because their SINRs
+and the BS power constraint are coupled. Configuration parsing and labels do
+not belong in either mathematical objective, and objectives receive Torch
+tensors rather than simulator objects. `convergence/solver.py` improves a beam; `allocation.py` decides
 payload bits and `n_kl`. Monte Carlo `rollout.py` selects visited states,
 `trainer.py` updates network weights, and `evaluator.py` runs held-out
 schedules.
@@ -44,6 +54,19 @@ schedules.
 
 Every experiment configuration is strict. Labels such as `payload`,
 `streaming`, `per_user_nets`, and `bs_shared_net` have no aliases.
+Both links expose the same `load_config()` contract, returning system
+parameters, simulation parameters, and run metadata.
+
+## Tensor Boundary
+
+Torch tensors are the canonical representation inside model inference,
+objectives, rate evaluation, candidate search, and gradient optimization.
+Channels loaded from generated datasets are converted when they enter this
+compute layer. Precoder tensors are converted to NumPy only when a completed
+schedule is committed to the current simulator or passed to persistence and
+plotting code. These boundary conversions live in `model_service.py` and
+`precoders/serialization.py`; model and physics modules must not return NumPy
+arrays.
 
 `results/metrics.py` owns link-independent latency, asynchronality, and
 reference-schedule schemas. `results/plotting.py` owns plot primitives shared

@@ -15,15 +15,16 @@ from latency_optimization.results.console import format_log_line, format_progres
 from ..config import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    get_config,
+    load_config,
     validate_uplink_objective_mode,
 )
-from ..precoder_models import (
-    build_user_precoder_net_with_blocklength_and_sigma,
+from ..precoders.checkpoints import (
     export_user_model_specs,
     export_user_model_states,
-    infer_precoder_torch_with_blocklength_and_sigma,
 )
+from ..precoders.inference import infer_precoder
+from ..precoders.models import build_user_precoder_net
+from ..simulation import estimate_initial_random_precoder_schedule_for_scenario
 from ..system import UplinkSystem
 
 from .network_operations import (
@@ -31,10 +32,7 @@ from .network_operations import (
     _compute_r_fbl_torch,
     _uplink_training_beam_reward_torch,
 )
-from .evaluator import (
-    estimate_initial_random_precoder_schedule_for_scenario,
-    evaluate_blocklength_precoder_net,
-)
+from .evaluator import evaluate_blocklength_precoder_net
 from .rollout import (
     _build_post_training_summary,
     _generate_rollout_queries_for_training_episodes,
@@ -53,7 +51,7 @@ def train_blocklength_aware_precoder_net(
     batch_size: int = 32,
     lr: float = 1e-3,
 ) -> dict:
-    system_params, sim_cfg = get_config(cfg_name)
+    system_params, sim_cfg, _ = load_config(cfg_name)
     K = int(system_params["K"])
     objective_mode = validate_uplink_objective_mode(
         sim_cfg.get("uplink_objective_mode", UNWEIGHTED_SUM_RATE_OBJECTIVE)
@@ -91,10 +89,10 @@ def train_blocklength_aware_precoder_net(
         ),
     }
     user_models = [
-        build_user_precoder_net_with_blocklength_and_sigma(
-            Nr=int(system_params["NR"][k]),
-            Nt=int(system_params["NT"][k]),
-            dk=int(system_params["dk"][k]),
+        build_user_precoder_net(
+            receive_antennas=int(system_params["NR"][k]),
+            transmit_antennas=int(system_params["NT"][k]),
+            streams=int(system_params["dk"][k]),
             device=DEVICE,
         )
         for k in range(K)
@@ -224,15 +222,15 @@ def train_blocklength_aware_precoder_net(
                             device=DEVICE,
                         )
                     )
-                    pred_t = infer_precoder_torch_with_blocklength_and_sigma(
+                    pred_t = infer_precoder(
                         model,
                         H_t,
                         int(query["n_kl"]),
                         float(query["sigma2"]),
                         float(query["epsilon"]),
-                        Nt=Nt,
-                        dk=dk,
-                        P=query["P"],
+                        transmit_antennas=Nt,
+                        streams=dk,
+                        power_limit=query["P"],
                     )
                     rate = _compute_r_fbl_torch(
                         H_t,
@@ -427,8 +425,6 @@ def train_blocklength_aware_precoder_net(
                 system_params["NR"],
                 system_params["NT"],
                 system_params["dk"],
-                uses_blocklength_input=True,
-                input_mode="channel_sigma_epsilon_n",
             ),
             "user_model_states": export_user_model_states(user_models),
             "precoder_parameterization": "shared_user_channel_n_sigma_epsilon_to_precoder_mlp",

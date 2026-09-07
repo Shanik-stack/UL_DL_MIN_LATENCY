@@ -22,17 +22,17 @@ from latency_optimization.runtime import DEVICE
 from ..config import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    get_config,
+    load_config,
 )
-from ..precoder_models import infer_precoder_numpy_with_blocklength_and_sigma
+from ..precoders.inference import infer_precoder
 from ..simulation import ensure_blocks_up_to
 from ..system import UplinkSystem
-from ..uplink_rate_model import build_uplink_rate_covariance
+from ..uplink_rate_model import build_uplink_rate_covariance_torch
 
 from .network_operations import (
     ROLLOUT_QUERY_OBJECTIVE_TRAINING_STYLE,
     _build_precoder_net_snapshot_for_active_mask,
-    _compute_r_fbl_np,
+    _compute_r_fbl_torch,
 )
 
 
@@ -40,7 +40,7 @@ def build_training_dataset(
     cfg_name: str,
     train_seeds: Sequence[int],
 ) -> list[dict[str, Any]]:
-    system_params, sim_cfg = get_config(cfg_name)
+    system_params, sim_cfg, _ = load_config(cfg_name)
     snr_db_by_user_by_seed = build_training_snr_schedule(
         train_seeds,
         sim_cfg["monte_carlo_training_snr_db_ranges"],
@@ -168,37 +168,37 @@ def _resolve_rollout_anchor_bits(rate: float, n_kl: int) -> int:
     return max(1, achievable_bits)
 
 
-def _evaluate_uplink_rollout_query_numpy(
+def _evaluate_uplink_rollout_query(
     model: torch.nn.Module,
     episode: dict[str, Any],
     n_kl: int,
 ) -> dict[str, Any]:
-    H = np.asarray(episode["H"], dtype=np.complex64)
+    H = torch.as_tensor(episode["H"], dtype=torch.complex64, device=DEVICE)
     noise_cov = episode.get("noise_plus_interference_cov")
     if noise_cov is not None:
-        noise_cov = np.asarray(noise_cov, dtype=np.complex128)
-    F_pred = infer_precoder_numpy_with_blocklength_and_sigma(
-        model,
-        H,
-        int(n_kl),
-        float(episode["sigma2"]),
-        float(episode["epsilon"]),
-        Nt=int(H.shape[1]),
-        dk=int(episode.get("dk", H.shape[1] if H.ndim > 1 else 1)),
-        P=float(episode["P"]),
-        device=DEVICE,
-    )
-    power = float(np.linalg.norm(F_pred, ord="fro") ** 2)
-    rate = float(
-        _compute_r_fbl_np(
+        noise_cov = torch.as_tensor(noise_cov, dtype=torch.complex64, device=DEVICE)
+    with torch.no_grad():
+        F_pred = infer_precoder(
+            model,
             H,
-            F_pred,
+            int(n_kl),
             float(episode["sigma2"]),
             float(episode["epsilon"]),
-            int(n_kl),
-            noise_cov,
+            transmit_antennas=int(H.shape[1]),
+            streams=int(episode.get("dk", H.shape[1] if H.ndim > 1 else 1)),
+            power_limit=float(episode["P"]),
         )
-    )
+        power = float(torch.linalg.norm(F_pred, ord="fro").square().real.cpu())
+        rate = float(
+            _compute_r_fbl_torch(
+                H,
+                F_pred,
+                float(episode["sigma2"]),
+                float(episode["epsilon"]),
+                int(n_kl),
+                noise_cov,
+            ).cpu()
+        )
     power_margin = float(episode["P"]) - float(power)
     return {
         "rate": rate,
@@ -208,11 +208,11 @@ def _evaluate_uplink_rollout_query_numpy(
 
 
 def _replace_snapshot_block(
-    snapshot: Sequence[Sequence[np.ndarray]],
+    snapshot: Sequence[Sequence[torch.Tensor]],
     user: int,
     block: int,
-    precoder: np.ndarray,
-) -> list[list[np.ndarray]]:
+    precoder: torch.Tensor,
+) -> list[list[torch.Tensor]]:
     replaced = [list(user_blocks) for user_blocks in snapshot]
     replaced[int(user)][int(block)] = precoder
     return replaced
@@ -235,30 +235,28 @@ def _count_uplink_forward_call(
 def _ensure_precoder_net_snapshot_block(
     uplinksystem: UplinkSystem,
     user_models: Sequence[torch.nn.Module],
-    snapshot_cache: list[list[np.ndarray]],
+    snapshot_cache: list[list[torch.Tensor]],
     block_idx: int,
     *,
     evaluation_cost_counters: dict[str, Any] | None = None,
-) -> list[list[np.ndarray]]:
+) -> list[list[torch.Tensor]]:
     ensure_blocks_up_to(uplinksystem, int(block_idx))
     for k in range(int(uplinksystem.K)):
         while len(snapshot_cache[int(k)]) <= int(block_idx):
             l = len(snapshot_cache[int(k)])
-            H_kl = np.asarray(uplinksystem.H[int(k)][int(l)], dtype=np.complex64)
             _count_uplink_forward_call(evaluation_cost_counters, int(k))
-            snapshot_cache[int(k)].append(
-                infer_precoder_numpy_with_blocklength_and_sigma(
+            with torch.no_grad():
+                precoder = infer_precoder(
                     user_models[int(k)],
-                    H_kl,
-                    n_kl=int(uplinksystem.T[int(k)]),
-                    sigma2=float(uplinksystem.sigma2[int(k)]),
-                    epsilon=float(uplinksystem.epsilon[int(k)]),
-                    Nt=int(uplinksystem.NT[int(k)]),
-                    dk=int(uplinksystem.dk[int(k)]),
-                    P=float(uplinksystem.P[int(k)]),
-                    device=DEVICE,
+                    uplinksystem.H[int(k)][int(l)],
+                    blocklength=int(uplinksystem.T[int(k)]),
+                    noise_variance=float(uplinksystem.sigma2[int(k)]),
+                    error_probability=float(uplinksystem.epsilon[int(k)]),
+                    transmit_antennas=int(uplinksystem.NT[int(k)]),
+                    streams=int(uplinksystem.dk[int(k)]),
+                    power_limit=float(uplinksystem.P[int(k)]),
                 )
-            )
+            snapshot_cache[int(k)].append(precoder.detach())
     return snapshot_cache
 
 
@@ -267,13 +265,13 @@ def _build_uplink_rollout_query(
     seed: int,
     user: int,
     block: int,
-    H: np.ndarray,
+    H: torch.Tensor,
     T_ref: int,
     P: float,
     dk: int,
     sigma2: float,
     epsilon: float,
-    noise_cov: np.ndarray | None,
+    noise_cov: torch.Tensor | None,
     n_kl: int,
     required_bits: int,
     metrics: dict[str, Any],
@@ -292,14 +290,14 @@ def _build_uplink_rollout_query(
         "seed": int(seed),
         "user": int(user),
         "block": int(block),
-        "H": np.asarray(H, dtype=np.complex64),
+        "H": H.detach(),
         "T_ref": int(T_ref),
         "P": float(P),
         "dk": int(dk),
         "sigma2": float(sigma2),
         "epsilon": float(epsilon),
         "noise_plus_interference_cov": (
-            None if noise_cov is None else np.asarray(noise_cov, dtype=np.complex128)
+            None if noise_cov is None else noise_cov.detach()
         ),
         "scenario_mode": str(scenario_mode),
         "n_kl": int(n_kl),
@@ -348,30 +346,25 @@ def _collect_uplink_payload_rollout_queries_for_episode(
             if int(active_mask[int(k)]) <= 0:
                 continue
             remaining_before_block = int(remaining[int(k)])
-            H_kl = np.asarray(system.H[int(k)][int(block)], dtype=np.complex64)
+            H_kl = torch.as_tensor(system.H[int(k)][int(block)], dtype=torch.complex64, device=DEVICE)
             T_ref = int(system.T[int(k)])
             P = float(system.P[int(k)])
             sigma2 = float(system.sigma2[int(k)])
             epsilon = float(system.epsilon[int(k)])
             dk = int(system.dk[int(k)])
-            F_T = infer_precoder_numpy_with_blocklength_and_sigma(
-                user_models[int(k)],
-                H_kl,
-                n_kl=T_ref,
-                sigma2=sigma2,
-                epsilon=epsilon,
-                Nt=int(system.NT[int(k)]),
-                dk=dk,
-                P=P,
-                device=DEVICE,
-            )
+            with torch.no_grad():
+                F_T = infer_precoder(
+                    user_models[int(k)], H_kl, T_ref, sigma2, epsilon,
+                    transmit_antennas=int(system.NT[int(k)]), streams=dk, power_limit=P,
+                ).detach()
             snapshot_candidate = _replace_snapshot_block(snapshot_full, int(k), int(block), F_T)
-            cov_T = build_uplink_rate_covariance(
+            cov_T = build_uplink_rate_covariance_torch(
                 system,
                 sim_cfg,
                 int(k),
                 int(block),
-                F_override=snapshot_candidate,
+                precoders=snapshot_candidate,
+                device=DEVICE,
             )
             base_episode = {
                 "H": H_kl,
@@ -381,7 +374,7 @@ def _collect_uplink_payload_rollout_queries_for_episode(
                 "dk": dk,
                 "noise_plus_interference_cov": cov_T,
             }
-            full_metrics = _evaluate_uplink_rollout_query_numpy(user_models[int(k)], base_episode, T_ref)
+            full_metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, T_ref)
             queries_by_user[int(k)].append(
                 _build_uplink_rollout_query(
                     seed=seed,
@@ -441,7 +434,7 @@ def _collect_uplink_payload_rollout_queries_for_episode(
                 phase="training",
             )
             def _evaluate_payload_rollout_candidate(candidate: int, stage_name: str) -> dict[str, Any]:
-                metrics = _evaluate_uplink_rollout_query_numpy(
+                metrics = _evaluate_uplink_rollout_query(
                     user_models[int(k)],
                     base_episode,
                     int(candidate),
@@ -513,30 +506,25 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
             target_bits = int(block_targets[int(k), int(block)])
             if target_bits <= 0:
                 continue
-            H_kl = np.asarray(system.H[int(k)][int(block)], dtype=np.complex64)
+            H_kl = torch.as_tensor(system.H[int(k)][int(block)], dtype=torch.complex64, device=DEVICE)
             T_ref = int(system.T[int(k)])
             P = float(system.P[int(k)])
             sigma2 = float(system.sigma2[int(k)])
             epsilon = float(system.epsilon[int(k)])
             dk = int(system.dk[int(k)])
-            F_T = infer_precoder_numpy_with_blocklength_and_sigma(
-                user_models[int(k)],
-                H_kl,
-                n_kl=T_ref,
-                sigma2=sigma2,
-                epsilon=epsilon,
-                Nt=int(system.NT[int(k)]),
-                dk=dk,
-                P=P,
-                device=DEVICE,
-            )
+            with torch.no_grad():
+                F_T = infer_precoder(
+                    user_models[int(k)], H_kl, T_ref, sigma2, epsilon,
+                    transmit_antennas=int(system.NT[int(k)]), streams=dk, power_limit=P,
+                ).detach()
             snapshot_candidate = _replace_snapshot_block(snapshot_full, int(k), int(block), F_T)
-            cov_T = build_uplink_rate_covariance(
+            cov_T = build_uplink_rate_covariance_torch(
                 system,
                 sim_cfg,
                 int(k),
                 int(block),
-                F_override=snapshot_candidate,
+                precoders=snapshot_candidate,
+                device=DEVICE,
             )
             base_episode = {
                 "H": H_kl,
@@ -546,7 +534,7 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
                 "dk": dk,
                 "noise_plus_interference_cov": cov_T,
             }
-            full_metrics = _evaluate_uplink_rollout_query_numpy(user_models[int(k)], base_episode, T_ref)
+            full_metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, T_ref)
             queries_by_user[int(k)].append(
                 _build_uplink_rollout_query(
                     seed=seed,
@@ -603,7 +591,7 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
 
             candidate = int(T_ref) - int(coarse_step)
             while candidate >= int(n_min):
-                metrics = _evaluate_uplink_rollout_query_numpy(user_models[int(k)], base_episode, int(candidate))
+                metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, int(candidate))
                 query = _build_uplink_rollout_query(
                     seed=seed,
                     user=int(k),
@@ -641,7 +629,7 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
                 candidate = int(last_feasible_n) - int(fine_step)
                 first_infeasible_n = int(first_infeasible_query["n_kl"])
                 while candidate > int(first_infeasible_n):
-                    metrics = _evaluate_uplink_rollout_query_numpy(user_models[int(k)], base_episode, int(candidate))
+                    metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, int(candidate))
                     query = _build_uplink_rollout_query(
                         seed=seed,
                         user=int(k),

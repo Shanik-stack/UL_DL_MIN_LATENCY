@@ -1,0 +1,48 @@
+
+|| ---------------- USER 0 ---------------- ||
+R_fbl: Initial [4.79633185 4.79346779] -> Final [5.13861608505249, 4.421799182891846]
+n_kl: Initial [12, 5] -> Final [12, 6]
+N_k: Initial 17 -> Final 18
+B_tx_kl: Initial [57, 23] -> Final [61, 19]
+Bits per symbol: Initial avg 4.705882352941177, per block [4.75, 4.6] -> Final [5.08333333 3.16666667]
+SNR_dB: Initial 4.9227 -> Final 5.8732
+SINR_dB: Initial -3.2505 -> Final -2.5154
+
+|| ---------------- USER 1 ---------------- ||
+R_fbl: Initial [6.37135781 3.64225552] -> Final [6.904471397399902, 4.315146446228027]
+n_kl: Initial [14, 9] -> Final [14, 7]
+N_k: Initial 23 -> Final 21
+B_tx_kl: Initial [89, 31] -> Final [96, 24]
+Bits per symbol: Initial avg 5.217391304347826, per block [6.357142857142857, 3.4444444444444446] -> Final [6.85714286 3.42857143]
+SNR_dB: Initial 3.7022 -> Final 4.1612
+SINR_dB: Initial -4.2592 -> Final -4.2247
+
+|| ---------------- USER 2 ---------------- ||
+R_fbl: Initial [5.79305968 5.32840304] -> Final [6.953711032867432, 4.997313022613525]
+n_kl: Initial [16, 14] -> Final [16, 10]
+N_k: Initial 30 -> Final 26
+B_tx_kl: Initial [92, 68] -> Final [111, 49]
+Bits per symbol: Initial avg 5.333333333333333, per block [5.75, 4.857142857142857] -> Final [6.9375 4.9   ]
+SNR_dB: Initial 3.6943 -> Final 3.7269
+SINR_dB: Initial -3.8536 -> Final -4.4483
+
+Initial latency per user:
+[0.00113333 0.00153333 0.002     ]
+
+Final latency per user:
+[0.0012     0.0014     0.00173333]
+Latency reduction per user (%): [-5.88235294  8.69565217 13.33333333]
+Total latency reduction (%): 7.142857142857156
+
+Initial asynchronality:
+User 0 - User 1: 0.00039999999999999996
+User 0 - User 2: 0.0008666666666666666
+User 1 - User 2: 0.00046666666666666666
+Initial sum of asynchronality: 0.0017333333333333333
+
+Final asynchronality:
+User 0 - User 1: 0.0002000000000000001
+User 0 - User 2: 0.0005333333333333334
+User 1 - User 2: 0.00033333333333333327
+Final sum of asynchronality: 0.0010666666666666667
+Asynchronality reduction (%): 38.46153846153845

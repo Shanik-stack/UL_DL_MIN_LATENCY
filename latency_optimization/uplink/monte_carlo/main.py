@@ -50,7 +50,7 @@ from latency_optimization.results.persistence import (
     write_result_manifest,
 )
 
-from ..config import get_config, load_config, validate_uplink_objective_mode
+from ..config import load_config, validate_uplink_objective_mode
 from ..plotting import (
     plot_F_vs_n_for_all_subblocks,
     plot_interference_before_after_heatmaps,
@@ -64,7 +64,7 @@ from ..plotting import (
     plot_per_user_interference_profiles,
     plot_user_config,
 )
-from ..precoder_models import load_user_precoder_models
+from ..precoders.checkpoints import load_user_precoder_models
 from ..reporting import (
     build_dispersion_diagnostic_lines,
     build_post_training_summary_lines,
@@ -73,9 +73,9 @@ from ..reporting import (
     build_training_dataset_summary_lines,
 )
 from ..result_writer import save_test_results_to_txt
+from ..simulation import estimate_initial_random_precoder_schedule_for_scenario
 from ..system import UplinkSystem
 from .evaluator import (
-    estimate_initial_random_precoder_schedule_for_scenario,
     evaluate_blocklength_precoder_net,
 )
 from .trainer import (
@@ -96,7 +96,7 @@ def evaluate_trained_precoder_network_on_test_channel(
     reused_training_artifact: str | None = None,
 ):
     configure_determinism(int(test_seed))
-    system_params, sim_cfg = get_config(cfg_name)
+    system_params, sim_cfg, _ = load_config(cfg_name)
     system_params = with_monte_carlo_sample_snr_by_user(system_params, test_snr_db_by_user)
     sim_cfg = dict(sim_cfg)
     if str(sim_cfg["experiment_scenario_mode"]) == "streaming":

@@ -31,6 +31,17 @@ def maximum_supported_bits(blocklength: int, rate: float) -> int:
     return int(np.floor(float(blocklength) * float(rate)))
 
 
+def resolve_blocklength(
+    system: DownlinkSystem,
+    user: int,
+    blocklengths: dict[int, int] | None,
+) -> int:
+    user = int(user)
+    if blocklengths is None:
+        return int(system.T[user])
+    return int(blocklengths.get(user, int(system.T[user])))
+
+
 def make_zero_precoder(system: DownlinkSystem, user: int) -> np.ndarray:
     user = int(user)
     return np.zeros((int(system.Nb[user]), int(system.dk[user])), dtype=np.complex128)

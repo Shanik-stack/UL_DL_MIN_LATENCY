@@ -1,0 +1,67 @@
+Uplink optimizer summary
+
+Setup
+Method: convergence_per_epoch_baseline
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_streaming_smoke.yaml
+Config content hash: cc0d739c7f4e
+Seed: 1000
+Run started at: 2026-09-07T02:37:46+03:00
+Run completed at: 2026-09-07T02:37:51+03:00
+Scenario: streaming
+Uplink rate model: snr
+Uplink objective mode: unweighted_sum_rate
+Beam reward mode: rate
+Convergence precoder update mode: precoder_net
+Precoder parameterization: shared_user_channel_n_sigma_epsilon_to_precoder_mlp_online_convergence
+Initial schedule source: random_precoder_baseline
+
+Final test results
+Initial total latency (random baseline): 0.000467
+Final total latency: 0.000467
+Latency reduction vs random precoder baseline (%): 0.0000
+Initial avg latency (random baseline): 0.000233
+Final avg latency: 0.000233
+Initial asynchronality sum (random baseline): 0.000067
+Final asynchronality sum: 0.000067
+Asynchronality reduction (%): 0.0000
+Initial avg served-user SNR (dB): 4.5861
+Final avg served-user SNR (dB): 4.5861
+Initial avg served-user SINR (dB): -1.3022
+Final avg served-user SINR (dB): -1.3022
+Final served-block avg capacity C: 2.870931
+Final served-block avg dispersion V: 2.038618
+Final served-block avg finite-blocklength penalty: 2.377482
+Final served-block avg penalty/C ratio: 0.831366
+Total served bits: 2
+Total skipped blocks: 0
+Initial total latency (naive full-T baseline): 0.000533
+Latency reduction vs naive full-T baseline (%): 12.5000
+Total target bits: 2
+Total unserved bits: 0
+Overall delivery ratio: 1.000000
+Total partially served blocks: 0
+Total zero-service blocks: 0
+
+Per-user final test details
+User 0 | init_lat=0.000200 | final_lat=0.000200 | lat_red_vs_random=0.0000% | init_snr=3.9731 dB | final_snr=3.9730 dB | init_sinr=-1.5335 dB | final_sinr=-1.5335 dB | blocks=1 | total_n=3 | served_bits=1 | skipped_blocks=0 | lat_red_vs_fullT=25.0000% | target_bits=1 | init_unserved_bits=0 | unserved_bits=0 | delivery_ratio=1.000000 | successful_blocks=1 | deadline_miss_fraction=0.000000 | avg_n_kl=3.0000 | partial_blocks=0 | zero_service_blocks=0
+User 1 | init_lat=0.000267 | final_lat=0.000267 | lat_red_vs_random=0.0000% | init_snr=5.1992 dB | final_snr=5.1992 dB | init_sinr=-1.0710 dB | final_sinr=-1.0710 dB | blocks=1 | total_n=4 | served_bits=1 | skipped_blocks=0 | lat_red_vs_fullT=0.0000% | target_bits=1 | init_unserved_bits=0 | unserved_bits=0 | delivery_ratio=1.000000 | successful_blocks=1 | deadline_miss_fraction=0.000000 | avg_n_kl=4.0000 | partial_blocks=0 | zero_service_blocks=0
+
+Per-pair asynchronality
+Users 0-1 | initial_diff=0.000067 | final_diff=0.000067
+
+Experiment cost
+Core wall time total (s): 4.978828
+Core wall time training (s): 4.978828
+Testing-phase wall time (s): 0.000000
+Forward+backward NN FLOPs: 1.569e+06
+Forward-only NN FLOPs: 2.615e+05
+Total NN FLOPs: 1.831e+06
+Forward+backward NN evaluations: 6
+Forward-only beam evaluations: 3
+Actual optimizer updates: 3
+Workload counters:
+{'solver_calls': 3, 'solver_calls_per_user': [2, 1], 'solver_epochs_per_user': [4, 2], 'optimizer_updates_per_user': [2, 1], 'visited_candidate_n_states_per_user': [2, 1]}
+Notes:
+- Forward+backward NN FLOPs count the online solver epochs that optimize the uplink precoder net.
+- Forward-only NN FLOPs count forward-only beam evaluations inside the same online convergence routine, not a separate testing phase.
+- Testing-phase wall time is 0.0 for convergence because there is no separate train/test split.

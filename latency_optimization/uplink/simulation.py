@@ -13,8 +13,8 @@ from latency_optimization.physics.rate_law import NORMAL_APPROXIMATION_RATE_LAW,
 from .system import UplinkSystem
 from .uplink_rate_model import (
     build_uplink_rate_covariance,
-    evaluate_uplink_rate_numpy,
-    evaluate_uplink_rate_torch,
+    evaluate_uplink_rate,
+    evaluate_uplink_rate_tensor,
 )
 
 def clone_nested_arrays(nested: Sequence[Sequence[np.ndarray]]) -> List[List[np.ndarray]]:
@@ -172,7 +172,7 @@ def _evaluate_fixed_precoder_blocklength(
     candidate_n: int,
     rate_law: RateLaw = NORMAL_APPROXIMATION_RATE_LAW,
 ) -> dict[str, float | bool]:
-    rate = evaluate_uplink_rate_numpy(
+    rate = evaluate_uplink_rate(
         channel,
         precoder,
         sigma2,
@@ -234,7 +234,7 @@ def estimate_initial_random_precoder_schedule(
                 F_override=random_snapshot,
             )
 
-            R_T = evaluate_uplink_rate_numpy(
+            R_T = evaluate_uplink_rate(
                 H_kl,
                 F_kl,
                 sigma2,
@@ -359,7 +359,7 @@ def _estimate_initial_random_precoder_schedule_for_streaming(
                 block,
                 F_override=random_snapshot,
             )
-            R_T = evaluate_uplink_rate_numpy(
+            R_T = evaluate_uplink_rate(
                 H_kl,
                 F_kl,
                 sigma2,
@@ -543,7 +543,7 @@ def compute_joint_rates_torch(
             HFj = Hj @ F_list[j]
             noise_cov = noise_cov + HFj @ HFj.conj().transpose(1, 0)
 
-        rate_result = evaluate_uplink_rate_torch(
+        rate_result = evaluate_uplink_rate_tensor(
             Hk,
             Fk,
             float(sigma2_list[k]),

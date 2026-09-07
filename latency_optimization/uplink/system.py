@@ -1,5 +1,9 @@
 import numpy as np
+import torch
 from latency_optimization.physics.rate_law import RateLaw, resolve_rate_law
+from latency_optimization.physics.finite_blocklength import scalar_rate_result
+from latency_optimization.precoders.parameters import as_complex_tensor
+from latency_optimization.runtime import DEVICE
 from .uplink_rate_model import UPLINK_RATE_MODEL_SINR, validate_uplink_rate_model
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -528,7 +532,11 @@ class UplinkSystem:
             for l in range(Lk):
                 A = self._build_effective_metric_matrix(k, l)
 
-                rate_result = self.rate_law.from_metric_numpy(A, int(Tk[l]), eps)
+                with torch.no_grad():
+                    tensor_result = self.rate_law.from_metric(
+                        as_complex_tensor(A, device=DEVICE), int(Tk[l]), eps
+                    )
+                rate_result = scalar_rate_result(tensor_result)
                 Ck[l] = rate_result.capacity
                 Vk[l] = rate_result.dispersion
                 Rk[l] = rate_result.rate

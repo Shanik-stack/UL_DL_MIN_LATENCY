@@ -6,7 +6,7 @@ from latency_optimization.results.paths import build_downlink_convergence_result
 
 from ..config import load_config
 from ..runner import build_result_tag, run_downlink_experiment
-from ..objective import validate_convergence_objective_mode
+from ..objective_settings import validate_convergence_objective_mode
 
 METHOD_NAME = "convergence_per_epoch_baseline"
 METHOD_LABEL = "Convergence per epoch"

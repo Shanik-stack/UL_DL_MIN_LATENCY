@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from latency_optimization.runtime import DEVICE
+from latency_optimization.precoders.serialization import precoder_to_numpy
 
 from .block_state import channels_for_block
 from .precoders.models import (
@@ -18,9 +19,10 @@ from .precoders.models import (
     validate_downlink_precoder_net_scope,
 )
 from .precoders.inference import (
-    infer_raw_bs_precoders_numpy,
     infer_raw_bs_precoders_torch,
-    infer_raw_precoder_numpy,
+    infer_raw_bs_precoders_torch_with_blocklength,
+    infer_raw_precoder_torch,
+    infer_raw_precoder_torch_with_blocklength,
 )
 from .system import DownlinkSystem
 
@@ -123,21 +125,88 @@ def active_mask_for_users(system: DownlinkSystem, active_users: Sequence[int]) -
     return [int(user in active) for user in range(system.K)]
 
 
-def infer_shared_block_precoders_numpy(
+def infer_shared_block_precoders_for_simulator(
     system: DownlinkSystem,
     shared_model: torch.nn.Module,
     block: int,
     active_users: Sequence[int],
 ) -> dict[int, np.ndarray]:
-    beams = infer_raw_bs_precoders_numpy(
-        shared_model,
-        channels_for_block(system, block),
-        active_mask_for_users(system, active_users),
-        system.Nb,
-        system.dk,
-        device=DEVICE,
-    )
-    return {int(user): np.asarray(beams[int(user)], dtype=np.complex128) for user in active_users}
+    with torch.no_grad():
+        beams = infer_raw_bs_precoders_torch(
+            shared_model,
+            channels_for_block(system, block),
+            active_mask_for_users(system, active_users),
+            system.Nb,
+            system.dk,
+        )
+    return {int(user): precoder_to_numpy(beams[int(user)]) for user in active_users}
+
+
+def infer_shared_blocklength_precoders_for_simulator(
+    system: DownlinkSystem,
+    shared_model: torch.nn.Module,
+    block: int,
+    blocklengths: Sequence[int],
+    active_mask: Sequence[int | float],
+) -> list[np.ndarray]:
+    with torch.no_grad():
+        beams = infer_raw_bs_precoders_torch_with_blocklength(
+            shared_model,
+            channels_for_block(system, block),
+            blocklengths,
+            active_mask,
+            system.sigma2,
+            system.epsilon,
+            system.Nb,
+            system.dk,
+        )
+    return [precoder_to_numpy(beam) for beam in beams]
+
+
+def infer_user_precoder_for_simulator(
+    model: torch.nn.Module,
+    channel,
+    nb: int,
+    dk: int,
+    *,
+    user_index: int,
+) -> np.ndarray:
+    with torch.no_grad():
+        beam = infer_raw_precoder_torch(
+            model,
+            torch.as_tensor(channel, dtype=torch.complex64, device=DEVICE),
+            nb,
+            dk,
+            user_index=user_index,
+        )
+    return precoder_to_numpy(beam)
+
+
+def infer_user_blocklength_precoder_for_simulator(
+    model: torch.nn.Module,
+    channels,
+    blocklength: int,
+    active_mask,
+    noise_covariance,
+    epsilon: float,
+    nb: int,
+    dk: int,
+    *,
+    user_index: int,
+) -> np.ndarray:
+    with torch.no_grad():
+        beam = infer_raw_precoder_torch_with_blocklength(
+            model,
+            channels,
+            blocklength,
+            active_mask,
+            torch.as_tensor(noise_covariance, dtype=torch.complex64, device=DEVICE),
+            epsilon,
+            nb,
+            dk,
+            user_index=user_index,
+        )
+    return precoder_to_numpy(beam)
 
 
 def infer_shared_block_precoders_torch(
@@ -173,7 +242,7 @@ def build_precoder_snapshot(
         snapshot: list[list[np.ndarray]] = [[] for _ in range(system.K)]
         max_blocks = max((len(user_blocks) for user_blocks in system.H), default=0)
         for block in range(max_blocks):
-            block_precoders = infer_shared_block_precoders_numpy(
+            block_precoders = infer_shared_block_precoders_for_simulator(
                 system,
                 models[0],
                 block,
@@ -186,12 +255,11 @@ def build_precoder_snapshot(
 
     snapshot = [
         [
-            infer_raw_precoder_numpy(
+            infer_user_precoder_for_simulator(
                 models[user],
                 np.asarray(system.H[user][block], dtype=np.complex64),
                 nb=int(system.Nb[user]),
                 dk=int(system.dk[user]),
-                device=DEVICE,
                 user_index=user,
             )
             for block in range(len(system.H[user]))
@@ -212,7 +280,7 @@ def refresh_block_precoders(
 ) -> None:
     block = int(block)
     if models_output_full_bs_precoder(models):
-        block_precoders = infer_shared_block_precoders_numpy(
+        block_precoders = infer_shared_block_precoders_for_simulator(
             system,
             models[0],
             block,
@@ -228,12 +296,11 @@ def refresh_block_precoders(
             user = int(user)
             if block >= len(precoders[user]):
                 raise ValueError(f"User {user} has no precoder slot for block {block}.")
-            precoders[user][block] = infer_raw_precoder_numpy(
+            precoders[user][block] = infer_user_precoder_for_simulator(
                 models[user],
                 np.asarray(system.H[user][block], dtype=np.complex64),
                 nb=int(system.Nb[user]),
                 dk=int(system.dk[user]),
-                device=DEVICE,
                 user_index=user,
             )
     system.project_block_precoders_to_power(
@@ -249,8 +316,11 @@ __all__ = [
     "build_precoder_models",
     "build_precoder_snapshot",
     "describe_precoder_parameterization",
-    "infer_shared_block_precoders_numpy",
+    "infer_shared_block_precoders_for_simulator",
+    "infer_shared_blocklength_precoders_for_simulator",
     "infer_shared_block_precoders_torch",
+    "infer_user_blocklength_precoder_for_simulator",
+    "infer_user_precoder_for_simulator",
     "initial_baseline_model_scope",
     "models_output_full_bs_precoder",
     "refresh_block_precoders",

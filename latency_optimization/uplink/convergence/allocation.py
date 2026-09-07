@@ -8,20 +8,20 @@ from torch import nn
 
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
 from latency_optimization.core.scenarios import STREAMING_MODE, build_experiment_scenario
-from latency_optimization.precoders.parameters import complex_parameter_from_numpy
+from latency_optimization.precoders.parameters import complex_parameter
 from latency_optimization.precoders.power import cap_matrix_power_numpy
 from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
 
 from ..model_service import build_precoder_snapshot_from_models
-from ..precoder_models import (
-    build_user_precoder_net_with_blocklength_and_sigma,
+from ..precoders.checkpoints import (
     export_user_model_specs,
     export_user_model_states,
     load_user_precoder_models,
 )
-from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate_numpy
-from ..objective import FiniteBlocklengthRateObjective
+from ..precoders.models import build_user_precoder_net
+from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate
+from ..objective import UplinkPrecoderObjective
 from .solver import (
     optimize_precoder_for_nl,
     validate_convergence_precoder_update_mode,
@@ -91,7 +91,7 @@ def optimize_user_blocklength_and_precoder(
     
     lr_net = float(sim_cfg["lr_net"])
 
-    loss_fn = FiniteBlocklengthRateObjective(
+    loss_fn = UplinkPrecoderObjective(
         channel=H_kl,
         noise_variance=sigma2,
         epsilon=epsilon,
@@ -438,10 +438,10 @@ def optimize_payload_with_precoder_training(
             uplinksystem.add_block(k)
 
         if update_mode == "precoder_net":
-            user_model = build_user_precoder_net_with_blocklength_and_sigma(
-                Nr=int(uplinksystem.NR[k]),
-                Nt=int(uplinksystem.NT[k]),
-                dk=int(uplinksystem.dk[k]),
+            user_model = build_user_precoder_net(
+                receive_antennas=int(uplinksystem.NR[k]),
+                transmit_antennas=int(uplinksystem.NT[k]),
+                streams=int(uplinksystem.dk[k]),
                 device=DEVICE,
             )
             user_precoder_models.append(user_model)
@@ -465,7 +465,7 @@ def optimize_payload_with_precoder_training(
 
             if update_mode == "direct_precoder":
                 initial_precoder = np.asarray(uplinksystem.F[k][ell], dtype=np.complex64)
-                precoder_param = complex_parameter_from_numpy(initial_precoder, device=DEVICE)
+                precoder_param = complex_parameter(initial_precoder, device=DEVICE)
                 user_optimizer = torch.optim.Adam([precoder_param], lr=float(sim_cfg["lr_net"]))
             else:
                 precoder_param = None
@@ -559,8 +559,6 @@ def optimize_payload_with_precoder_training(
                 uplinksystem.NR,
                 uplinksystem.NT,
                 uplinksystem.dk,
-                uses_blocklength_input=True,
-                input_mode="channel_sigma_epsilon_n",
             )
             if update_mode == "precoder_net"
             else []
@@ -623,10 +621,10 @@ def optimize_streaming_blocks_with_precoder_training(
         norm_stats.append((0.0 + 0.0j, 1.0))
 
         if update_mode == "precoder_net":
-            user_model = build_user_precoder_net_with_blocklength_and_sigma(
-                Nr=int(uplinksystem.NR[k]),
-                Nt=int(uplinksystem.NT[k]),
-                dk=int(uplinksystem.dk[k]),
+            user_model = build_user_precoder_net(
+                receive_antennas=int(uplinksystem.NR[k]),
+                transmit_antennas=int(uplinksystem.NT[k]),
+                streams=int(uplinksystem.dk[k]),
                 device=DEVICE,
             )
             user_precoder_models.append(user_model)
@@ -650,7 +648,7 @@ def optimize_streaming_blocks_with_precoder_training(
             )
             if update_mode == "direct_precoder":
                 initial_precoder = np.asarray(uplinksystem.F[k][ell], dtype=np.complex64)
-                precoder_param = complex_parameter_from_numpy(initial_precoder, device=DEVICE)
+                precoder_param = complex_parameter(initial_precoder, device=DEVICE)
                 user_optimizer = torch.optim.Adam([precoder_param], lr=float(sim_cfg["lr_net"]))
             else:
                 precoder_param = None
@@ -750,8 +748,6 @@ def optimize_streaming_blocks_with_precoder_training(
                 uplinksystem.NR,
                 uplinksystem.NT,
                 uplinksystem.dk,
-                uses_blocklength_input=True,
-                input_mode="channel_sigma_epsilon_n",
             )
             if update_mode == "precoder_net"
             else []
@@ -866,7 +862,7 @@ def evaluate_payload_with_trained_precoder_network(
             # STEP A: evaluate the fixed beam at n=T and serve the
             # feasible payload directly, without retrying.
             # ==========================================================
-            R_T = evaluate_uplink_rate_numpy(
+            R_T = evaluate_uplink_rate(
                 H_kl, F_fix, sigma2, epsilon, n_kl=T,
                 noise_plus_interference_covariance=noise_plus_interference_cov
             ).rate
@@ -886,7 +882,7 @@ def evaluate_payload_with_trained_precoder_network(
             S_block = []
 
             # n=T point
-            R_T = evaluate_uplink_rate_numpy(
+            R_T = evaluate_uplink_rate(
                 H_kl, F_fix, sigma2, epsilon, n_kl=T,
                 noise_plus_interference_covariance=noise_plus_interference_cov
             ).rate
@@ -923,7 +919,7 @@ def evaluate_payload_with_trained_precoder_network(
                     lambda candidate_n, stage_name: {
                         "feasible": (
                             float(B_used) / float(max(int(candidate_n), 1))
-                        ) <= evaluate_uplink_rate_numpy(
+                        ) <= evaluate_uplink_rate(
                             H_kl,
                             F_fix,
                             sigma2,
@@ -931,7 +927,7 @@ def evaluate_payload_with_trained_precoder_network(
                             n_kl=int(candidate_n),
                             noise_plus_interference_covariance=noise_plus_interference_cov,
                         ).rate,
-                        "R_candidate": evaluate_uplink_rate_numpy(
+                        "R_candidate": evaluate_uplink_rate(
                             H_kl,
                             F_fix,
                             sigma2,

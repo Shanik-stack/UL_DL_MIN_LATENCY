@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import numpy as np
+import torch
+
+from latency_optimization.runtime import DEVICE
 
 
 def normalized_inverse_cnr_weights(
-    channels: Sequence[np.ndarray],
+    channels: Sequence[object],
     noise_powers: Sequence[float],
     active_users: Sequence[int],
 ) -> dict[int, float]:
@@ -15,15 +17,21 @@ def normalized_inverse_cnr_weights(
     if not users:
         return {}
 
-    inverse_cnr: dict[int, float] = {}
-    for k in users:
-        channel = np.asarray(channels[k], dtype=np.complex128)
-        channel_gain = float(np.linalg.norm(channel, ord="fro") ** 2) / max(channel.shape[0], 1)
-        cnr = channel_gain / max(float(noise_powers[k]), 1e-30)
-        inverse_cnr[k] = 1.0 / max(cnr, 1e-30)
-
-    mean_inverse_cnr = float(np.mean(list(inverse_cnr.values())))
-    return {
-        k: float(inverse_cnr[k] / max(mean_inverse_cnr, 1e-30))
+    channel_tensors = [
+        torch.as_tensor(channels[k], dtype=torch.complex64, device=DEVICE)
         for k in users
+    ]
+    channel_gains = torch.stack(
+        [channel.abs().square().sum() / max(channel.shape[0], 1) for channel in channel_tensors]
+    )
+    noise = torch.as_tensor(
+        [float(noise_powers[k]) for k in users],
+        dtype=channel_gains.dtype,
+        device=channel_gains.device,
+    ).clamp_min(1e-30)
+    inverse_cnr = (channel_gains / noise).clamp_min(1e-30).reciprocal()
+    normalized = inverse_cnr / inverse_cnr.mean().clamp_min(1e-30)
+    return {
+        user: float(weight)
+        for user, weight in zip(users, normalized.detach().cpu().tolist())
     }

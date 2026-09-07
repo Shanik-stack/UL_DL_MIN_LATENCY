@@ -20,7 +20,7 @@ from latency_optimization.core.scenarios import PAYLOAD_MODE
 from latency_optimization.core.validation import require_choice
 from latency_optimization.experiments.configuration import load_config_document
 from latency_optimization.project import BENCHMARK_CONFIG_ROOT
-from latency_optimization.precoders.parameters import complex_parameter_from_numpy
+from latency_optimization.precoders.parameters import complex_parameter
 from latency_optimization.results.naming import (
     format_method_tag,
     format_update_mode_tag,
@@ -42,12 +42,11 @@ from latency_optimization.runtime import DEVICE
 from ...config import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    get_config,
     load_config,
     validate_uplink_beam_reward_mode,
     validate_uplink_objective_mode,
 )
-from ...objective import FiniteBlocklengthRateObjective
+from ...objective import UplinkPrecoderObjective
 from ...convergence.solver import (
     optimize_precoder_for_nl,
     validate_convergence_precoder_update_mode,
@@ -284,7 +283,7 @@ def _build_exact_action_solver(
         block: int,
         bits: int,
         n_kl: int,
-        loss_fn: FiniteBlocklengthRateObjective,
+        loss_fn: UplinkPrecoderObjective,
         Nt: int,
         dk: int,
         optimizer: torch.optim.Optimizer,
@@ -342,7 +341,7 @@ def _build_exact_action_solver(
             if noise_cov_np is None
             else torch.tensor(noise_cov_np, dtype=torch.complex64, device=DEVICE)
         )
-        loss_fn = FiniteBlocklengthRateObjective(
+        loss_fn = UplinkPrecoderObjective(
             channel=H_kl,
             noise_variance=sigma2,
             epsilon=epsilon,
@@ -353,7 +352,7 @@ def _build_exact_action_solver(
             rate_law=frozen_system.rate_law,
         ).to(DEVICE)
         initial_precoder = np.asarray(frozen_system.F[user][block], dtype=np.complex64)
-        precoder_param = complex_parameter_from_numpy(initial_precoder, device=DEVICE)
+        precoder_param = complex_parameter(initial_precoder, device=DEVICE)
         optimizer = torch.optim.Adam([precoder_param], lr=lr_net)
 
         frontier: dict[int, dict] = {}
@@ -474,7 +473,7 @@ def _run_current_online_strategy(
         while B_rem > 0 and ell < int(max_blocks):
             block_index_by_user[k] = int(ell)
             initial_precoder = np.asarray(system.F[k][ell], dtype=np.complex64)
-            precoder_param = complex_parameter_from_numpy(initial_precoder, device=DEVICE)
+            precoder_param = complex_parameter(initial_precoder, device=DEVICE)
             user_optimizer = torch.optim.Adam([precoder_param], lr=float(sim_cfg["lr_net"]))
 
             stdout_buffer = io.StringIO()
@@ -1151,7 +1150,7 @@ def run_exhaustive_payload_compare(
     catalog_detail_mode: str | None = None,
 ) -> dict:
     raw_cfg, cfg_path = _load_raw_config(cfg_name)
-    system_params, sim_cfg = get_config(cfg_name)
+    system_params, sim_cfg, _ = load_config(cfg_name)
     _validate_experiment_inputs(system_params, sim_cfg)
 
     exhaustive_cfg = raw_cfg.get("simulation", {}).get("exhaustive_compare", {})

@@ -16,7 +16,7 @@ from latency_optimization.experiments.channels import (
     with_monte_carlo_sample_snr_by_user,
 )
 from latency_optimization.experiments.determinism import configure_determinism
-from latency_optimization.precoders.parameters import as_complex_numpy
+from latency_optimization.precoders.serialization import precoder_to_numpy
 from latency_optimization.results.console import format_log_line
 
 from ..block_state import ensure_precoder_block, make_zero_precoder
@@ -78,7 +78,7 @@ def _apply_forward_to_working_precoders(
         has_n = int(k) < len(n_targets) and int(n_targets[int(k)]) > 0
         if is_active and has_n:
             working_F[int(k)][int(block)] = np.asarray(
-                as_complex_numpy(forward["predicted_beams"][int(k)]),
+                precoder_to_numpy(forward["predicted_beams"][int(k)]),
                 dtype=np.complex128,
             )
         else:

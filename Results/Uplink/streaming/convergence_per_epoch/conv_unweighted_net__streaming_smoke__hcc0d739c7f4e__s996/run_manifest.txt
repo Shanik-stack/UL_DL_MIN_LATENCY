@@ -1,0 +1,62 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Convergence per epoch
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_streaming_smoke.yaml
+config_hash: cc0d739c7f4e
+seed: 996
+run_started_at_local: 2026-09-07T01:25:19+03:00
+run_completed_at_local: 2026-09-07T01:25:26+03:00
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\streaming\convergence_per_epoch\conv_unweighted_net__streaming_smoke__hcc0d739c7f4e__s996
+Files recorded: 33
+Result artifacts: 31
+Plots: 27
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 31
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\convergence_results.json
+- testing\data\convergence_results.txt
+- testing\data\result.json
+- testing\data\summary.txt
+- testing\interference\interference_before_after_heatmaps.png
+- testing\interference\interference_heatmaps.png
+- testing\interference\per_user_interference_before_after.png
+- testing\interference\per_user_interference_profiles.png
+- testing\latency_asynchronality\convergence_async_distribution.png
+- testing\latency_asynchronality\convergence_final_async_heatmap.png
+- testing\latency_asynchronality\convergence_initial_async_heatmap.png
+- testing\latency_asynchronality\convergence_latency_comparison.png
+- testing\latency_asynchronality\convergence_latency_histogram.png
+- testing\link_quality\convergence_link_quality_comparison.png
+- testing\optimization_history\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- testing\optimization_history\F_vs_n\user0_Fchange_vs_n.png
+- testing\optimization_history\F_vs_n\user0_Fincrement_vs_n.png
+- testing\optimization_history\F_vs_n\user0_Fpower_vs_n.png
+- testing\optimization_history\F_vs_n\user0_Rfbl_vs_n.png
+- testing\optimization_history\F_vs_n\user1_Fchange_vs_n.png
+- testing\optimization_history\F_vs_n\user1_Fincrement_vs_n.png
+- testing\optimization_history\F_vs_n\user1_Fpower_vs_n.png
+- testing\optimization_history\F_vs_n\user1_Rfbl_vs_n.png
+- testing\optimization_history\convergence_optimization_user0_block0.png
+- testing\optimization_history\convergence_optimization_user1_block0.png
+- testing\optimization_history\convergence_user0_kkt_residual_history.png
+- testing\optimization_history\convergence_user0_summary.png
+- testing\optimization_history\convergence_user1_kkt_residual_history.png
+- testing\optimization_history\convergence_user1_summary.png
+- testing\schedule_details\per_user_schedule_details.png
+- testing\user_config\user_config_summary.png

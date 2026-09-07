@@ -20,7 +20,7 @@ from latency_optimization.results.naming import make_method_result_tag
 from latency_optimization.results.paths import build_uplink_convergence_result_dirs
 from latency_optimization.results.persistence import current_local_timestamp, save_json, save_text
 
-from ..config import get_config, load_config
+from ..config import load_config
 from ..plotting import (
     plot_interference_before_after_heatmaps,
     plot_interference_heatmaps,
@@ -44,7 +44,7 @@ from ..simulation import (
     estimate_initial_random_precoder_schedule_for_scenario,
 )
 from ..system import UplinkSystem
-from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate_numpy
+from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate
 
 
 ArrayC = np.ndarray
@@ -353,7 +353,7 @@ def run_uplink_closed_form_benchmark(
                 F_override=working_F,
             )
 
-            R_T = evaluate_uplink_rate_numpy(
+            R_T = evaluate_uplink_rate(
                 H_kl,
                 F_kl,
                 sigma2,
@@ -381,7 +381,7 @@ def run_uplink_closed_form_benchmark(
                     lambda candidate_n, _stage: {
                         "feasible": (
                             float(B_used) / float(max(int(candidate_n), 1))
-                        ) <= evaluate_uplink_rate_numpy(
+                        ) <= evaluate_uplink_rate(
                             H_kl,
                             F_kl,
                             sigma2,
@@ -389,7 +389,7 @@ def run_uplink_closed_form_benchmark(
                             int(candidate_n),
                             noise_plus_interference_cov,
                         ).rate,
-                        "R_candidate": evaluate_uplink_rate_numpy(
+                        "R_candidate": evaluate_uplink_rate(
                             H_kl,
                             F_kl,
                             sigma2,

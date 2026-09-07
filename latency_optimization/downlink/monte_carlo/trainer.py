@@ -15,7 +15,7 @@ from latency_optimization.precoders.model_state import (
 )
 from latency_optimization.results.console import format_log_line, format_progress_log_line
 
-from ..objective import (
+from ..objective_settings import (
     objective_display_name,
     objective_weight_strategy_name,
     validate_convergence_objective_mode,

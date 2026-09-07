@@ -28,13 +28,13 @@ from ..block_state import (
     user_link_budget,
     zero_precoder_block,
 )
-from ..objective import (
+from ..objective_settings import (
     objective_display_name,
     objective_weight_strategy_name,
     validate_convergence_objective_mode,
     validate_convergence_priority_weight_strategy,
 )
-from ..precoders.inference import infer_raw_precoder_numpy_with_blocklength
+from ..model_service import infer_user_blocklength_precoder_for_simulator
 from ..precoders.models import model_outputs_full_bs_precoder, validate_downlink_precoder_net_scope
 from ..system import DownlinkSystem
 from ..user_weights import normalized_inverse_cnr_weights
@@ -87,16 +87,15 @@ def _predict_user_precoder_for_blocklength(
             per_user[k] = int(per_user[k]) + 1
     H_block = channels_for_block(system, l)
     input_noise_cov = system.get_interference_plus_noise_covariance(k, l, F_override=input_precoders)
-    return infer_raw_precoder_numpy_with_blocklength(
+    return infer_user_blocklength_precoder_for_simulator(
         model,
         H_block,
         int(n_kl),
         active_mask,
-        np.asarray(input_noise_cov, dtype=np.complex128),
+        input_noise_cov,
         float(system.epsilon[k]),
         nb=int(system.Nb[k]),
         dk=int(system.dk[k]),
-        device=DEVICE,
         user_index=int(k),
     )
 
@@ -791,73 +790,6 @@ def _plan_streaming_block_one_user_change_at_a_time(
         "final_plans": final_plans,
         "initial_metrics": initial_metrics,
     }
-
-
-def _estimate_streaming_latency_with_random_precoders(
-    system: DownlinkSystem,
-    sim_params: dict[str, Any],
-    scenario: dict[str, Any],
-    allow_n_reduction: bool = True,
-) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
-    baseline_system = DownlinkSystem(system.sc, seed=system.seed)
-    block_targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
-    num_blocks = int(scenario["number_of_blocks"])
-    n_plan: list[list[int]] = [[] for _ in range(baseline_system.K)]
-    B_plan: list[list[int]] = [[] for _ in range(baseline_system.K)]
-    R_plan: list[list[float]] = [[] for _ in range(baseline_system.K)]
-    skipped_blocks_per_user = [0 for _ in range(baseline_system.K)]
-    working_F = baseline_system.clone_precoders()
-
-    for block in range(num_blocks):
-        for k in range(baseline_system.K):
-            ensure_precoder_block(baseline_system, working_F, k, block, use_previous_as_template=False)
-            if int(block_targets[k, block]) > 0:
-                working_F[k][block] = baseline_system.sample_precoder(k, block)
-        active_users = [k for k in range(baseline_system.K) if int(block_targets[k, block]) > 0]
-        baseline_system.project_block_precoders_to_power(
-            working_F,
-            block,
-            active_users=[int(k) for k in active_users],
-        )
-
-        for k in range(baseline_system.K):
-            target_bits = int(block_targets[k, block])
-
-            B_used, n_used, R_used, F_used = _allocate_streaming_bits_from_precoder_snapshot(
-                baseline_system,
-                working_F,
-                int(k),
-                int(block),
-                int(target_bits),
-                sim_params,
-                allow_infeasible_zero=True,
-                allow_n_reduction=allow_n_reduction,
-            )
-            working_F[int(k)][int(block)] = np.array(F_used, copy=True)
-            if B_used <= 0:
-                skipped_blocks_per_user[int(k)] += 1
-                n_plan[k].append(int(baseline_system.T[k]))
-                B_plan[k].append(0)
-                R_plan[k].append(float(R_used))
-                continue
-
-            n_plan[k].append(int(n_used))
-            B_plan[k].append(int(B_used))
-            R_plan[k].append(float(R_used))
-
-    initial_F = expand_precoders_for_plan(baseline_system, working_F, n_plan)
-    baseline_system.apply_solution(initial_F, n_plan)
-    latency = baseline_system.latency.tolist()
-    initial_plan = {
-        "n_kl": n_plan,
-        "B_kl": B_plan,
-        "R_alloc": R_plan,
-        "skipped_blocks_per_user": [int(v) for v in skipped_blocks_per_user],
-        "scenario_mode": STREAMING_MODE,
-        "scenario_block_targets": block_targets.tolist(),
-        "blocks_per_user": [int(len(v)) for v in n_plan],
-    }
-    return latency, initial_plan, collect_interference_diagnostics(baseline_system)
 
 
 def _estimate_initial_latency_from_random_precoders_for_scenario(

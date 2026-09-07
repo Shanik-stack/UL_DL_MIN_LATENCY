@@ -9,21 +9,21 @@ from latency_optimization.core.blocklength import build_monte_carlo_n_search_con
 from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
 from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
+from latency_optimization.precoders.serialization import precoder_to_numpy
 
-from ..precoder_models import infer_precoder_numpy_with_blocklength_and_sigma
+from ..precoders.inference import infer_precoder
 from ..simulation import (
     apply_training_solution,
     clone_nested_arrays,
     collect_uplink_interference_diagnostics,
     ensure_blocks_up_to,
-    estimate_initial_random_precoder_schedule_for_scenario as shared_estimate_initial_random_precoder_schedule_for_scenario,
 )
 from ..system import UplinkSystem
-from ..uplink_rate_model import build_uplink_rate_covariance, uses_uplink_interference
+from ..uplink_rate_model import build_uplink_rate_covariance_torch, uses_uplink_interference
 
 from .network_operations import (
     _build_precoder_net_snapshot_for_active_mask,
-    _compute_r_fbl_np,
+    _compute_r_fbl_torch,
     _zero_uplink_precoder,
 )
 from .rollout import (
@@ -31,138 +31,6 @@ from .rollout import (
     _ensure_precoder_net_snapshot_block,
     _replace_snapshot_block,
 )
-
-
-def _estimate_initial_random_precoder_schedule_for_streaming(
-    system_params: dict[str, Any],
-    sim_cfg: dict[str, Any],
-    *,
-    seed: int,
-    scenario: dict[str, Any],
-) -> dict[str, Any]:
-    baseline_system = UplinkSystem(system_params, seed=int(seed))
-    K = int(baseline_system.K)
-    n_kl_min = int(sim_cfg["n_kl_min"])
-    n_kl_step = int(sim_cfg["n_kl_step"])
-    block_targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
-    num_blocks = int(scenario["number_of_blocks"])
-
-    initial_n_kl: list[list[int]] = [[] for _ in range(K)]
-    initial_B_kl: list[list[int]] = [[] for _ in range(K)]
-    initial_R_fbl: list[list[float]] = [[] for _ in range(K)]
-    initial_F: list[list[np.ndarray]] = [[] for _ in range(K)]
-    skipped_blocks_per_user = [0 for _ in range(K)]
-
-    for block in range(num_blocks):
-        ensure_blocks_up_to(baseline_system, block)
-        random_snapshot = clone_nested_arrays(baseline_system.F)
-
-        for k in range(K):
-            target_bits = int(block_targets[k, block])
-            H_kl = np.asarray(baseline_system.H[k][block], dtype=np.complex64)
-            F_kl = np.asarray(random_snapshot[k][block], dtype=np.complex64)
-            T_ref = int(baseline_system.T[k])
-            sigma2 = float(baseline_system.sigma2[k])
-            epsilon = float(baseline_system.epsilon[k])
-            noise_plus_interference_cov = build_uplink_rate_covariance(
-                baseline_system,
-                sim_cfg,
-                k,
-                block,
-                F_override=random_snapshot,
-            )
-            R_T = _compute_r_fbl_np(
-                H_kl,
-                F_kl,
-                sigma2,
-                epsilon,
-                T_ref,
-                noise_plus_interference_cov,
-            )
-            B_max = max(int(np.floor(float(T_ref) * float(R_T))), 0)
-            B_used = int(min(target_bits, B_max))
-            best_n = int(T_ref)
-            best_R = float(R_T)
-            if int(B_used) >= int(target_bits) and int(target_bits) > 0:
-                candidate_n = int(T_ref) - int(n_kl_step)
-                while candidate_n >= int(n_kl_min):
-                    R_candidate = _compute_r_fbl_np(
-                        H_kl,
-                        F_kl,
-                        sigma2,
-                        epsilon,
-                        candidate_n,
-                        noise_plus_interference_cov,
-                    )
-                    if (float(target_bits) / float(max(candidate_n, 1))) <= R_candidate:
-                        best_n = int(candidate_n)
-                        best_R = float(R_candidate)
-                        candidate_n -= int(n_kl_step)
-                    else:
-                        break
-
-            initial_n_kl[k].append(int(best_n))
-            initial_B_kl[k].append(int(B_used))
-            initial_R_fbl[k].append(float(best_R))
-            initial_F[k].append(
-                np.array(F_kl, copy=True) if int(B_used) > 0 else _zero_uplink_precoder(baseline_system, k)
-            )
-            if int(B_used) <= 0:
-                skipped_blocks_per_user[k] += 1
-
-    initial_n = [int(sum(int(max(v, 0)) for v in user_n)) for user_n in initial_n_kl]
-    initial_latency = [
-        float(initial_n[k]) / float(max(float(baseline_system.fs[k]), 1e-30))
-        for k in range(K)
-    ]
-    initial_bits_per_symbol_by_block = []
-    initial_bits_per_symbol = []
-    for k in range(K):
-        user_bps = [
-            float(bits) / float(max(int(n_kl), 1))
-            if int(n_kl) > 0 and int(bits) > 0
-            else 0.0
-            for bits, n_kl in zip(initial_B_kl[k], initial_n_kl[k])
-        ]
-        total_n = float(max(initial_n[k], 1))
-        initial_bits_per_symbol_by_block.append(user_bps)
-        initial_bits_per_symbol.append(float(sum(initial_B_kl[k])) / total_n if initial_n[k] > 0 else 0.0)
-
-    apply_training_solution(baseline_system, initial_n_kl, initial_F)
-    _, initial_snr_db = baseline_system.get_SNR()
-    _, initial_sinr_db = baseline_system.get_SINR()
-    initial_interference_diag = collect_uplink_interference_diagnostics(baseline_system)
-
-    return {
-        "initial_n_kl": initial_n_kl,
-        "initial_B_kl": initial_B_kl,
-        "initial_R_fbl": initial_R_fbl,
-        "initial_n": initial_n,
-        "initial_latency": [float(v) for v in baseline_system.latency],
-        "initial_snr_db": list(map(float, initial_snr_db)),
-        "initial_sinr_db": list(map(float, initial_sinr_db)),
-        "initial_bits_per_symbol": initial_bits_per_symbol,
-        "initial_bits_per_symbol_by_block": initial_bits_per_symbol_by_block,
-        "initial_interference_diag": initial_interference_diag,
-        "skipped_blocks_per_user": [int(v) for v in skipped_blocks_per_user],
-        "scenario_mode": STREAMING_MODE,
-        "scenario_block_targets": block_targets.tolist(),
-    }
-
-
-def estimate_initial_random_precoder_schedule_for_scenario(
-    system_params: dict[str, Any],
-    sim_cfg: dict[str, Any],
-    *,
-    seed: int,
-    allow_n_reduction: bool = True,
-) -> dict[str, Any]:
-    return shared_estimate_initial_random_precoder_schedule_for_scenario(
-        system_params,
-        sim_cfg,
-        seed=int(seed),
-        allow_n_reduction=allow_n_reduction,
-    )
 
 
 def _evaluate_precoder_network_for_streaming(
@@ -202,7 +70,9 @@ def _evaluate_precoder_network_for_streaming(
 
         for k in range(K):
             target_bits = int(block_targets[k, block])
-            H_kl = np.asarray(uplinksystem.H[k][block], dtype=np.complex64)
+            H_kl = torch.as_tensor(
+                uplinksystem.H[k][block], dtype=torch.complex64, device=DEVICE
+            )
             T_ref = int(uplinksystem.T[k])
             P = float(uplinksystem.P[k])
             sigma2 = float(uplinksystem.sigma2[k])
@@ -210,26 +80,24 @@ def _evaluate_precoder_network_for_streaming(
             zero_precoder = _zero_uplink_precoder(uplinksystem, k)
             S_block = []
 
-            F_T = infer_precoder_numpy_with_blocklength_and_sigma(
-                user_models[k],
-                H_kl,
-                n_kl=T_ref,
-                sigma2=sigma2,
-                epsilon=epsilon,
-                Nt=int(uplinksystem.NT[k]),
-                dk=int(uplinksystem.dk[k]),
-                P=P,
-                device=DEVICE,
-            )
+            with torch.no_grad():
+                F_T = infer_precoder(
+                    user_models[k], H_kl, T_ref, sigma2, epsilon,
+                    transmit_antennas=int(uplinksystem.NT[k]),
+                    streams=int(uplinksystem.dk[k]), power_limit=P,
+                ).detach()
             snapshot_candidate = _replace_snapshot_block(snapshot_full, int(k), int(block), F_T)
-            cov_T = build_uplink_rate_covariance(
+            cov_T = build_uplink_rate_covariance_torch(
                 uplinksystem,
                 sim_cfg,
                 k,
                 block,
-                F_override=snapshot_candidate,
+                precoders=snapshot_candidate,
+                device=DEVICE,
             )
-            R_T = _compute_r_fbl_np(H_kl, F_T, sigma2, epsilon, T_ref, cov_T)
+            R_T = float(
+                _compute_r_fbl_torch(H_kl, F_T, sigma2, epsilon, T_ref, cov_T).detach().cpu()
+            )
             B_max = max(int(np.floor(float(T_ref) * float(R_T))), 0)
             B_used = int(min(target_bits, B_max))
             target_bits_star[k].append(int(target_bits))
@@ -245,9 +113,9 @@ def _evaluate_precoder_network_for_streaming(
                         ),
                         "required_R_fbl": float(target_bits) / float(max(int(T_ref), 1)),
                         "achieved_R_fbl": float(R_T),
-                        "F": torch.tensor(F_T if int(B_used) > 0 else zero_precoder, dtype=torch.complex64),
+                        "F": (F_T if int(B_used) > 0 else zero_precoder).detach(),
                         "R_fbl": float(R_T),
-                        "F_power": float(np.linalg.norm(F_T, "fro") ** 2) if int(B_used) > 0 else 0.0,
+                        "F_power": float(torch.linalg.norm(F_T, ord="fro").square().real.cpu()) if int(B_used) > 0 else 0.0,
                         "lambda_rate": 0.0,
                         "lambda_power": 0.0,
                         "loss_curve": [],
@@ -259,7 +127,7 @@ def _evaluate_precoder_network_for_streaming(
                 )
                 all_user_block_results[k].append(S_block)
                 n_star[k].append(int(T_ref))
-                F_star[k].append(np.array(F_T if int(B_used) > 0 else zero_precoder, copy=True))
+                F_star[k].append((F_T if int(B_used) > 0 else zero_precoder).detach().clone())
                 R_star[k].append(float(R_T))
                 B_used_star[k].append(int(B_used))
                 B_kl_star[k].append(int(B_used))
@@ -270,7 +138,7 @@ def _evaluate_precoder_network_for_streaming(
 
             best_n = int(T_ref)
             best_R = float(R_T)
-            best_F = np.array(F_T, copy=True)
+            best_F = F_T.detach().clone()
             S_block.append(
                 {
                     "n_kl": int(T_ref),
@@ -279,9 +147,9 @@ def _evaluate_precoder_network_for_streaming(
                     "Bits per sub-block length B/n_kl": float(target_bits) / float(max(int(T_ref), 1)),
                     "required_R_fbl": float(target_bits) / float(max(int(T_ref), 1)),
                     "achieved_R_fbl": float(R_T),
-                    "F": torch.tensor(F_T, dtype=torch.complex64),
+                    "F": F_T.detach(),
                     "R_fbl": float(R_T),
-                    "F_power": float(np.linalg.norm(F_T, "fro") ** 2),
+                    "F_power": float(torch.linalg.norm(F_T, ord="fro").square().real.cpu()),
                     "lambda_rate": 0.0,
                     "lambda_power": 0.0,
                     "loss_curve": [],
@@ -294,33 +162,31 @@ def _evaluate_precoder_network_for_streaming(
 
             n_kl = int(T_ref) - int(n_kl_step)
             while n_kl >= int(n_kl_min):
-                F_n = infer_precoder_numpy_with_blocklength_and_sigma(
-                    user_models[k],
-                    H_kl,
-                    n_kl=n_kl,
-                    sigma2=sigma2,
-                    epsilon=epsilon,
-                    Nt=int(uplinksystem.NT[k]),
-                    dk=int(uplinksystem.dk[k]),
-                    P=P,
-                    device=DEVICE,
-                )
+                with torch.no_grad():
+                    F_n = infer_precoder(
+                        user_models[k], H_kl, n_kl, sigma2, epsilon,
+                        transmit_antennas=int(uplinksystem.NT[k]),
+                        streams=int(uplinksystem.dk[k]), power_limit=P,
+                    ).detach()
                 snapshot_candidate = _replace_snapshot_block(snapshot_full, int(k), int(block), F_n)
-                cov_n = build_uplink_rate_covariance(
+                cov_n = build_uplink_rate_covariance_torch(
                     uplinksystem,
                     sim_cfg,
                     k,
                     block,
-                    F_override=snapshot_candidate,
+                    precoders=snapshot_candidate,
+                    device=DEVICE,
                 )
-                R_n = _compute_r_fbl_np(H_kl, F_n, sigma2, epsilon, n_kl, cov_n)
+                R_n = float(
+                    _compute_r_fbl_torch(H_kl, F_n, sigma2, epsilon, n_kl, cov_n).detach().cpu()
+                )
                 rate_violation = (target_bits / float(max(int(n_kl), 1))) - R_n
                 if rate_violation > 0.0:
                     break
 
                 best_n = int(n_kl)
                 best_R = float(R_n)
-                best_F = np.array(F_n, copy=True)
+                best_F = F_n.detach().clone()
                 S_block.append(
                     {
                         "n_kl": int(n_kl),
@@ -329,9 +195,9 @@ def _evaluate_precoder_network_for_streaming(
                         "Bits per sub-block length B/n_kl": float(target_bits) / float(max(int(n_kl), 1)),
                         "required_R_fbl": float(target_bits) / float(max(int(n_kl), 1)),
                         "achieved_R_fbl": float(R_n),
-                        "F": torch.tensor(F_n, dtype=torch.complex64),
+                        "F": F_n.detach(),
                         "R_fbl": float(R_n),
-                        "F_power": float(np.linalg.norm(F_n, "fro") ** 2),
+                        "F_power": float(torch.linalg.norm(F_n, ord="fro").square().real.cpu()),
                         "lambda_rate": 0.0,
                         "lambda_power": 0.0,
                         "loss_curve": [],
@@ -345,18 +211,22 @@ def _evaluate_precoder_network_for_streaming(
 
             all_user_block_results[k].append(S_block)
             n_star[k].append(int(best_n))
-            F_star[k].append(np.array(best_F, copy=True))
+            F_star[k].append(best_F.detach().clone())
             R_star[k].append(float(best_R))
             B_used_star[k].append(int(target_bits))
             B_kl_star[k].append(int(target_bits))
             unserved_bits_star[k].append(0)
 
-    apply_training_solution(uplinksystem, n_star, F_star)
+    serialized_precoders = [
+        [precoder_to_numpy(precoder) for precoder in user_blocks]
+        for user_blocks in F_star
+    ]
+    apply_training_solution(uplinksystem, n_star, serialized_precoders)
 
     return {
         "L_out": [int(len(v)) for v in n_star],
         "n_star": n_star,
-        "F_star": F_star,
+        "F_star": serialized_precoders,
         "R_star": R_star,
         "all_user_block_results_train": all_user_block_results,
         "B_used_star": B_used_star,
@@ -403,7 +273,7 @@ def evaluate_blocklength_precoder_net(
     n_kl_min = int(sim_cfg["n_kl_min"])
     n_kl_step = int(sim_cfg["n_kl_step"])
     use_interference = uses_uplink_interference(sim_cfg)
-    snapshot_cache: list[list[np.ndarray]] | None = ([[] for _ in range(K)] if use_interference else None)
+    snapshot_cache: list[list[torch.Tensor]] | None = ([[] for _ in range(K)] if use_interference else None)
 
     for k in range(K):
         print(
@@ -419,7 +289,9 @@ def evaluate_blocklength_precoder_net(
         while B_rem > 0:
             ensure_blocks_up_to(uplinksystem, ell)
 
-            H_kl = np.asarray(uplinksystem.H[k][ell], dtype=np.complex64)
+            H_kl = torch.as_tensor(
+                uplinksystem.H[k][ell], dtype=torch.complex64, device=DEVICE
+            )
             T_ref = int(uplinksystem.T[k])
             P = float(uplinksystem.P[k])
             sigma2 = float(uplinksystem.sigma2[k])
@@ -447,30 +319,28 @@ def evaluate_blocklength_precoder_net(
             S_block = []
 
             _count_uplink_forward_call(evaluation_cost_counters, int(k))
-            F_T = infer_precoder_numpy_with_blocklength_and_sigma(
-                user_models[k],
-                H_kl,
-                n_kl=T_ref,
-                sigma2=sigma2,
-                epsilon=epsilon,
-                Nt=int(uplinksystem.NT[k]),
-                dk=int(uplinksystem.dk[k]),
-                P=P,
-                device=DEVICE,
-            )
+            with torch.no_grad():
+                F_T = infer_precoder(
+                    user_models[k], H_kl, T_ref, sigma2, epsilon,
+                    transmit_antennas=int(uplinksystem.NT[k]),
+                    streams=int(uplinksystem.dk[k]), power_limit=P,
+                ).detach()
             snapshot_candidate = (
                 _replace_snapshot_block(snapshot_full, int(k), int(ell), F_T)
                 if snapshot_full is not None
                 else None
             )
-            cov_T = build_uplink_rate_covariance(
+            cov_T = build_uplink_rate_covariance_torch(
                 uplinksystem,
                 sim_cfg,
                 k,
                 ell,
-                F_override=snapshot_candidate,
+                precoders=snapshot_candidate,
+                device=DEVICE,
             )
-            R_T = _compute_r_fbl_np(H_kl, F_T, sigma2, epsilon, T_ref, cov_T)
+            R_T = float(
+                _compute_r_fbl_torch(H_kl, F_T, sigma2, epsilon, T_ref, cov_T).detach().cpu()
+            )
             B_max = max(int(np.floor(float(T_ref) * float(R_T))), 0)
             B_used = int(min(B_rem, B_max))
 
@@ -504,9 +374,9 @@ def evaluate_blocklength_precoder_net(
                     "n": int(T_ref),
                     "B_l": int(B_used),
                     "Bits per sub-block length B/n_kl": float(B_used) / float(T_ref),
-                    "F": torch.tensor(F_T, dtype=torch.complex64),
+                    "F": F_T.detach(),
                     "R_fbl": float(R_T),
-                    "F_power": float(np.linalg.norm(F_T, "fro") ** 2),
+                    "F_power": float(torch.linalg.norm(F_T, ord="fro").square().real.cpu()),
                     "lambda_rate": 0.0,
                     "lambda_power": 0.0,
                     "loss_curve": [],
@@ -536,30 +406,30 @@ def evaluate_blocklength_precoder_net(
 
                 def _evaluate_payload_eval_candidate(candidate_n: int, stage_name: str) -> dict[str, Any]:
                     _count_uplink_forward_call(evaluation_cost_counters, int(k))
-                    F_n = infer_precoder_numpy_with_blocklength_and_sigma(
-                        user_models[k],
-                        H_kl,
-                        n_kl=int(candidate_n),
-                        sigma2=sigma2,
-                        epsilon=epsilon,
-                        Nt=int(uplinksystem.NT[k]),
-                        dk=int(uplinksystem.dk[k]),
-                        P=P,
-                        device=DEVICE,
-                    )
+                    with torch.no_grad():
+                        F_n = infer_precoder(
+                            user_models[k], H_kl, int(candidate_n), sigma2, epsilon,
+                            transmit_antennas=int(uplinksystem.NT[k]),
+                            streams=int(uplinksystem.dk[k]), power_limit=P,
+                        ).detach()
                     snapshot_candidate = (
                         _replace_snapshot_block(snapshot_full, int(k), int(ell), F_n)
                         if snapshot_full is not None
                         else None
                     )
-                    cov_n = build_uplink_rate_covariance(
+                    cov_n = build_uplink_rate_covariance_torch(
                         uplinksystem,
                         sim_cfg,
                         k,
                         ell,
-                        F_override=snapshot_candidate,
+                        precoders=snapshot_candidate,
+                        device=DEVICE,
                     )
-                    R_n = _compute_r_fbl_np(H_kl, F_n, sigma2, epsilon, int(candidate_n), cov_n)
+                    R_n = float(
+                        _compute_r_fbl_torch(
+                            H_kl, F_n, sigma2, epsilon, int(candidate_n), cov_n
+                        ).detach().cpu()
+                    )
                     rate_violation = (float(B_used) / float(max(int(candidate_n), 1))) - float(R_n)
                     print(
                         format_log_line(
@@ -575,23 +445,23 @@ def evaluate_blocklength_precoder_net(
                     return {
                         "feasible": bool(rate_violation <= 0.0),
                         "R_fbl": float(R_n),
-                        "F": np.array(F_n, copy=True),
+                        "F": F_n.detach().clone(),
                     }
 
                 reduction_search = run_n_frontier_search(search_cfg, _evaluate_payload_eval_candidate)
                 for accepted in reduction_search["accepted"]:
                     best_n = int(accepted["n_kl"])
                     best_R = float(accepted["result"]["R_fbl"])
-                    best_F = torch.tensor(accepted["result"]["F"], dtype=torch.complex64)
+                    best_F = accepted["result"]["F"].detach().clone()
                     S_block.append(
                         {
                             "n_kl": int(best_n),
                             "n": int(best_n),
                             "B_l": int(B_used),
                             "Bits per sub-block length B/n_kl": float(B_used) / float(best_n),
-                            "F": torch.tensor(accepted["result"]["F"], dtype=torch.complex64),
+                            "F": accepted["result"]["F"].detach(),
                             "R_fbl": float(best_R),
-                            "F_power": float(np.linalg.norm(accepted["result"]["F"], "fro") ** 2),
+                            "F_power": float(torch.linalg.norm(accepted["result"]["F"], ord="fro").square().real.cpu()),
                             "lambda_rate": 0.0,
                             "lambda_power": 0.0,
                             "loss_curve": [],
@@ -624,12 +494,16 @@ def evaluate_blocklength_precoder_net(
                 ell += 1
                 L_out[k] = ell + 1
 
-    apply_training_solution(uplinksystem, n_star, F_star)
+    serialized_precoders = [
+        [precoder_to_numpy(precoder) for precoder in user_blocks]
+        for user_blocks in F_star
+    ]
+    apply_training_solution(uplinksystem, n_star, serialized_precoders)
 
     return {
         "L_out": L_out,
         "n_star": n_star,
-        "F_star": F_star,
+        "F_star": serialized_precoders,
         "R_star": R_star,
         "all_user_block_results_train": all_user_block_results,
         "B_used_star": B_used_star,
@@ -643,6 +517,5 @@ def evaluate_blocklength_precoder_net(
 
 
 __all__ = [
-    "estimate_initial_random_precoder_schedule_for_scenario",
     "evaluate_blocklength_precoder_net",
 ]

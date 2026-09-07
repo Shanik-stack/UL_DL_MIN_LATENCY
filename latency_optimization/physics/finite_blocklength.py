@@ -1,30 +1,16 @@
-"""Canonical finite-blocklength MIMO rate calculation.
-
-The NumPy and Torch entry points intentionally share the same decomposition:
-whiten the desired channel, form its Hermitian metric, and then evaluate the
-capacity and dispersion terms. Torch remains differentiable with respect to
-the precoder; NumPy is used for simulation and reporting.
-"""
+"""Canonical Torch finite-blocklength MIMO rate calculation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import math
 
-import numpy as np
 import torch
 from scipy.stats import norm
 
 
-LOG2_E_SQUARED = float(np.log2(np.e) ** 2)
-
-
-@dataclass(frozen=True)
-class NumpyRateResult:
-    rate: float
-    capacity: float
-    dispersion: float
-    penalty: float
+LOG2_E_SQUARED = (1.0 / math.log(2.0)) ** 2
 
 
 @dataclass(frozen=True)
@@ -33,6 +19,25 @@ class TorchRateResult:
     capacity: torch.Tensor
     dispersion: torch.Tensor
     penalty: torch.Tensor
+
+
+@dataclass(frozen=True)
+class ScalarRateResult:
+    """Detached values used only by scheduling and reporting code."""
+
+    rate: float
+    capacity: float
+    dispersion: float
+    penalty: float
+
+
+def scalar_rate_result(result: TorchRateResult) -> ScalarRateResult:
+    return ScalarRateResult(
+        rate=float(result.rate.detach().cpu()),
+        capacity=float(result.capacity.detach().cpu()),
+        dispersion=float(result.dispersion.detach().cpu()),
+        penalty=float(result.penalty.detach().cpu()),
+    )
 
 
 @lru_cache(maxsize=256)
@@ -50,42 +55,11 @@ def _validate_blocklength(n_kl: int) -> int:
     return blocklength
 
 
-def _hermitian_numpy(matrix: np.ndarray) -> np.ndarray:
-    return 0.5 * (matrix + matrix.conj().T)
-
-
 def _hermitian_torch(matrix: torch.Tensor) -> torch.Tensor:
     return 0.5 * (matrix + matrix.conj().transpose(-2, -1))
 
 
-def finite_blocklength_from_metric_numpy(
-    metric: np.ndarray,
-    n_kl: int,
-    epsilon: float,
-) -> NumpyRateResult:
-    blocklength = _validate_blocklength(n_kl)
-    effective_metric = _hermitian_numpy(np.asarray(metric, dtype=np.complex128))
-    identity = np.eye(effective_metric.shape[-1], dtype=np.complex128)
-    sign, log_determinant = np.linalg.slogdet(identity + effective_metric)
-    if float(np.real(sign)) <= 0.0:
-        raise RuntimeError("I + effective channel metric is not positive definite.")
-
-    capacity = float(np.real(log_determinant) / np.log(2.0))
-    eigenvalues = np.linalg.eigvalsh(effective_metric).real
-    dispersion = float(
-        np.sum(eigenvalues * (eigenvalues + 2.0) / (eigenvalues + 1.0) ** 2)
-        * LOG2_E_SQUARED
-    )
-    penalty = float(np.sqrt(max(dispersion, 0.0) / blocklength) * q_inverse(epsilon))
-    return NumpyRateResult(
-        rate=float(capacity - penalty),
-        capacity=capacity,
-        dispersion=dispersion,
-        penalty=penalty,
-    )
-
-
-def finite_blocklength_from_metric_torch(
+def finite_blocklength_from_metric(
     metric: torch.Tensor,
     n_kl: int,
     epsilon: float,
@@ -101,7 +75,9 @@ def finite_blocklength_from_metric_torch(
     if torch.any(sign.real <= 0):
         raise RuntimeError("I + effective channel metric is not positive definite.")
 
-    capacity = log_determinant.real / np.log(2.0)
+    capacity = log_determinant.real / torch.log(
+        torch.as_tensor(2.0, dtype=log_determinant.real.dtype, device=metric.device)
+    )
     eigenvalues = torch.linalg.eigvalsh(effective_metric).real
     dispersion = (
         torch.sum(eigenvalues * (eigenvalues + 2.0) / (eigenvalues + 1.0) ** 2)
@@ -121,31 +97,7 @@ def finite_blocklength_from_metric_torch(
     )
 
 
-def finite_blocklength_mimo_numpy(
-    channel: np.ndarray,
-    precoder: np.ndarray,
-    noise_covariance: np.ndarray,
-    n_kl: int,
-    epsilon: float,
-    *,
-    covariance_jitter: float = 0.0,
-) -> NumpyRateResult:
-    channel_matrix = np.asarray(channel, dtype=np.complex128)
-    precoder_matrix = np.asarray(precoder, dtype=np.complex128)
-    covariance = _hermitian_numpy(np.asarray(noise_covariance, dtype=np.complex128))
-    if covariance_jitter > 0.0:
-        covariance = covariance + float(covariance_jitter) * np.eye(
-            covariance.shape[-1], dtype=np.complex128
-        )
-    whitened_channel = np.linalg.solve(
-        np.linalg.cholesky(covariance),
-        channel_matrix @ precoder_matrix,
-    )
-    metric = whitened_channel @ whitened_channel.conj().T
-    return finite_blocklength_from_metric_numpy(metric, n_kl, epsilon)
-
-
-def finite_blocklength_mimo_torch(
+def finite_blocklength_mimo(
     channel: torch.Tensor,
     precoder: torch.Tensor,
     noise_covariance: torch.Tensor,
@@ -166,16 +118,15 @@ def finite_blocklength_mimo_torch(
         channel @ precoder,
     )
     metric = whitened_channel @ whitened_channel.conj().transpose(-2, -1)
-    return finite_blocklength_from_metric_torch(metric, n_kl, epsilon)
+    return finite_blocklength_from_metric(metric, n_kl, epsilon)
 
 
 __all__ = [
     "LOG2_E_SQUARED",
-    "NumpyRateResult",
+    "ScalarRateResult",
     "TorchRateResult",
-    "finite_blocklength_from_metric_numpy",
-    "finite_blocklength_from_metric_torch",
-    "finite_blocklength_mimo_numpy",
-    "finite_blocklength_mimo_torch",
+    "finite_blocklength_from_metric",
+    "finite_blocklength_mimo",
     "q_inverse",
+    "scalar_rate_result",
 ]

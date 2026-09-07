@@ -69,9 +69,7 @@ def _validate_simulation_keys(sim_cfg: dict) -> None:
         )
 
 
-def get_config(cfg_name: str) -> tuple[dict, dict]:
-    cfg = load_config_document(cfg_name).data
-
+def _build_config(cfg: dict) -> tuple[dict, dict]:
     test_cfg = cfg["test"]
     test_k = test_cfg["K"]
     test_Nr = test_cfg["Nr"]
@@ -180,5 +178,5 @@ def get_config(cfg_name: str) -> tuple[dict, dict]:
 
 def load_config(cfg_name: str) -> tuple[dict, dict, dict]:
     document = load_config_document(cfg_name)
-    system_test_params, simulation_test_params = get_config(str(document.path))
+    system_test_params, simulation_test_params = _build_config(document.data)
     return system_test_params, simulation_test_params, document.metadata

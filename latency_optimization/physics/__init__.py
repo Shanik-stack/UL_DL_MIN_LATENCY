@@ -1,24 +1,22 @@
 """Shared physical-layer calculations used by every experiment method."""
 
 from .finite_blocklength import (
-    NumpyRateResult,
+    ScalarRateResult,
     TorchRateResult,
-    finite_blocklength_from_metric_numpy,
-    finite_blocklength_from_metric_torch,
-    finite_blocklength_mimo_numpy,
-    finite_blocklength_mimo_torch,
+    finite_blocklength_from_metric,
+    finite_blocklength_mimo,
     q_inverse,
+    scalar_rate_result,
 )
 from .rate_law import NORMAL_APPROXIMATION_RATE_LAW, NormalApproximationRateLaw, RateLaw
 
 __all__ = [
-    "NumpyRateResult",
+    "ScalarRateResult",
     "TorchRateResult",
-    "finite_blocklength_from_metric_numpy",
-    "finite_blocklength_from_metric_torch",
-    "finite_blocklength_mimo_numpy",
-    "finite_blocklength_mimo_torch",
+    "finite_blocklength_from_metric",
+    "finite_blocklength_mimo",
     "q_inverse",
+    "scalar_rate_result",
     "NORMAL_APPROXIMATION_RATE_LAW",
     "NormalApproximationRateLaw",
     "RateLaw",

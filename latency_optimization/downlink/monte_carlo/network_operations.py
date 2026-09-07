@@ -6,15 +6,18 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import torch
 
-from latency_optimization.physics.finite_blocklength import finite_blocklength_mimo_torch
+from latency_optimization.physics.finite_blocklength import finite_blocklength_mimo
 from latency_optimization.precoders.power import joint_power_scale_torch
 from latency_optimization.results.persistence import make_serializable
 from latency_optimization.runtime import DEVICE
 
 from ..block_state import channels_for_block, make_zero_precoder
 from ..config import validate_shared_bs_streaming_blocklength_input_mode
-from ..model_service import describe_precoder_parameterization
-from ..objective import (
+from ..model_service import (
+    describe_precoder_parameterization,
+    infer_shared_blocklength_precoders_for_simulator,
+)
+from ..objective_settings import (
     objective_display_name,
     validate_convergence_priority_weight_strategy,
 )
@@ -23,7 +26,6 @@ from ..precoders.checkpoints import (
     export_user_model_states,
 )
 from ..precoders.inference import (
-    infer_raw_bs_precoders_numpy_with_blocklength,
     infer_raw_bs_precoders_torch_with_blocklength,
     infer_raw_precoder_torch_with_blocklength,
 )
@@ -120,7 +122,7 @@ def _compute_r_fbl_torch(
     n_kl: int,
     noise_plus_interference_cov: torch.Tensor,
 ) -> torch.Tensor:
-    return finite_blocklength_mimo_torch(
+    return finite_blocklength_mimo(
         H,
         Fmat,
         noise_plus_interference_cov,
@@ -167,16 +169,12 @@ def _shared_precoder_snapshot_for_targets(
                 if 0 <= int(k) < len(per_user):
                     per_user[int(k)] = int(per_user[int(k)]) + 1
 
-    beams = infer_raw_bs_precoders_numpy_with_blocklength(
+    beams = infer_shared_blocklength_precoders_for_simulator(
+        system,
         model,
-        channels_for_block(system, int(block)),
+        int(block),
         list(n_targets),
         active_mask,
-        np.asarray(system.sigma2, dtype=np.float32),
-        np.asarray(system.epsilon, dtype=np.float32),
-        system.Nb,
-        system.dk,
-        device=DEVICE,
     )
     snapshot = [list(user_blocks) for user_blocks in (base_snapshot if base_snapshot is not None else system.clone_precoders())]
     for k in active_users:
@@ -545,7 +543,7 @@ def _best_joint_n_target_transition(
     eligible_users: Sequence[int] | None = None,
     inference_counters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    direction = require_choice(direction, {"descending", "ascending"}, "joint n-target transition direction")
+    # direction = require_choice(direction, {"descending", "ascending"}, "joint n-target transition direction")
 
     if max_n_targets is None:
         max_targets = [int(v) for v in scenario.get("max_n_targets", current_n_targets)]
