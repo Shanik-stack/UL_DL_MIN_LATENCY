@@ -9,10 +9,10 @@ import torch
 from latency_optimization.core.blocklength import build_monte_carlo_n_search_config, run_n_frontier_search
 from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
 from latency_optimization.results.console import format_latency_log_line, format_log_line
-from latency_optimization.runtime import DEVICE
 
 from ..baselines import (
-    estimate_initial_latency_from_random_precoders_for_scenario as shared_estimate_initial_latency_from_random_precoders_for_scenario,
+    estimate_random_precoder_payload_latency,
+    estimate_random_precoder_streaming_latency,
 )
 from ..config import validate_shared_bs_streaming_blocklength_input_mode
 from ..block_state import (
@@ -36,6 +36,7 @@ from ..objective_settings import (
 )
 from ..model_service import infer_user_blocklength_precoder_for_simulator
 from ..precoders.models import model_outputs_full_bs_precoder, validate_downlink_precoder_net_scope
+from ..reporting import build_monte_carlo_evaluation_result
 from ..system import DownlinkSystem
 from ..user_weights import normalized_inverse_cnr_weights
 
@@ -49,7 +50,6 @@ from .network_operations import (
     _shared_n_targets_for_block,
     _shared_precoder_snapshot_for_targets,
 )
-from .reporting import build_evaluation_result
 
 
 def _predict_user_precoder_for_blocklength(
@@ -62,6 +62,12 @@ def _predict_user_precoder_for_blocklength(
     input_precoders: list[list[np.ndarray]],
     inference_counters: dict[str, Any] | None = None,
 ) -> np.ndarray:
+    """Produce user k's test-time beam for one candidate blocklength.
+
+    Per-user mode queries model k with joint context. Shared-BS mode queries one model
+    for the complete n vector and extracts user k's beam slice. No network parameters
+    are updated; the output is used only to evaluate candidate service and latency.
+    """
     k = int(user)
     l = int(block)
     if model_outputs_full_bs_precoder(model):
@@ -100,54 +106,6 @@ def _predict_user_precoder_for_blocklength(
     )
 
 
-def _allocate_streaming_bits_from_precoder_snapshot(
-    system: DownlinkSystem,
-    frozen_F: list[list[np.ndarray]],
-    user: int,
-    block: int,
-    target_bits: int,
-    sim_params: dict[str, Any],
-    *,
-    allow_infeasible_zero: bool = False,
-    allow_n_reduction: bool = True,
-) -> tuple[int, int, float, np.ndarray]:
-    k = int(user)
-    l = int(block)
-    T_k = int(system.T[k])
-    n_min = int(sim_params["n_kl_min"])
-    n_step = int(sim_params["n_kl_step"])
-    zero_beam = make_zero_precoder(system, k)
-
-    if int(target_bits) <= 0:
-        return 0, int(T_k), 0.0, zero_beam
-
-    F_fixed = np.asarray(frozen_F[k][l], dtype=np.complex128)
-    snapshot = _copy_snapshot_with_block_overrides(
-        frozen_F,
-        int(l),
-        {int(k): np.array(F_fixed, copy=True)},
-    )
-    R_T = float(system.compute_block_rate(k, l, T_k, F_override=snapshot))
-    B_max = max(maximum_supported_bits(T_k, R_T), 0)
-    B_used = int(min(int(target_bits), B_max))
-    if int(B_used) <= 0 and allow_infeasible_zero:
-        return 0, T_k, 0.0, zero_beam
-
-    chosen_n = int(T_k)
-    chosen_R = float(R_T)
-    if allow_n_reduction and int(B_used) >= int(target_bits) and int(target_bits) > 0:
-        candidate = T_k - n_step
-        while candidate >= n_min:
-            R_candidate = float(system.compute_block_rate(k, l, int(candidate), F_override=snapshot))
-            if (float(target_bits) / float(max(int(candidate), 1))) <= R_candidate:
-                chosen_n = int(candidate)
-                chosen_R = float(R_candidate)
-                candidate -= int(n_step)
-            else:
-                break
-    return int(B_used), int(chosen_n), float(chosen_R), np.array(F_fixed, copy=True)
-
-
 def _allocate_bits_for_user_block_precoder_net(
     system: DownlinkSystem,
     frozen_F: list[list[np.ndarray]],
@@ -161,11 +119,16 @@ def _allocate_bits_for_user_block_precoder_net(
     allow_infeasible_zero: bool = False,
     inference_counters: dict[str, Any] | None = None,
 ) -> tuple[int, int, float, np.ndarray]:
+    """Allocate one payload user's bits and blocklength using trained-network inference.
+
+    What: evaluate ``n=T`` to determine supportable bits; if the remaining payload fits,
+    query the same trained model at smaller n candidates and keep the feasible frontier.
+    Returns ``(served_bits, chosen_n, achieved_rate, chosen_beam)`` for joint reconciliation.
+    """
     k = int(user)
     l = int(block)
     T_k = int(system.T[k])
     n_min = int(sim_params["n_kl_min"])
-    n_step = int(sim_params["n_kl_step"])
     F_T = _predict_user_precoder_for_blocklength(
         system,
         model,
@@ -251,11 +214,11 @@ def _allocate_streaming_bits_with_precoder_network(
     allow_infeasible_zero: bool = False,
     inference_counters: dict[str, Any] | None = None,
 ) -> tuple[int, int, float, np.ndarray]:
+    """Search one streaming target's n_kl values using trained-network inference."""
     k = int(user)
     l = int(block)
     T_k = int(system.T[k])
     n_min = int(sim_params["n_kl_min"])
-    n_step = int(sim_params["n_kl_step"])
     zero_beam = make_zero_precoder(system, k)
 
     if int(target_bits) <= 0:
@@ -338,6 +301,12 @@ def _reconcile_streaming_plans_after_joint_precoder_commit(
     active_mask: Sequence[int | float],
     inference_counters: dict[str, Any] | None = None,
 ) -> None:
+    """Repair streaming plans after all locally proposed beams become one BS transmission.
+
+    What: jointly power-project the beams, recompute each user's true interference-coupled
+    rate, and rerun allocation when a reduced-n proposal no longer serves its target.
+    Why: rates measured before final beam combination are not valid evidence of final service.
+    """
     l = int(block)
     active_users = [int(k) for k in range(system.K) if float(active_mask[int(k)]) > 0.5]
     if len(active_users) == 0:
@@ -445,6 +414,12 @@ def _reconcile_payload_plans_after_commit(
     active_mask: Sequence[int | float],
     inference_counters: dict[str, Any] | None = None,
 ) -> None:
+    """Repair payload plans after all proposed user beams are jointly committed.
+
+    What: recompute true rates after joint power projection, retry invalid reduced-n
+    actions, and cap ``B_used`` by ``floor(n_k R_k_final)``. Why: only reconciled bits
+    may be subtracted from remaining payload or used in final latency reporting.
+    """
     l = int(block)
     active_users = [int(k) for k in range(system.K) if float(active_mask[int(k)]) > 0.5]
     if len(active_users) == 0:
@@ -545,6 +520,11 @@ def _finalize_streaming_plans_from_shared_bs_precoder(
     n_targets: Sequence[int],
     active_mask: Sequence[int | float],
 ) -> dict[int, dict[str, Any]]:
+    """Convert one shared-BS beam into feasible per-user streaming actions.
+
+    It repeatedly removes zero-service users, reprojects the remaining full precoder,
+    then records each user's actual rate, served bits, n, beam, and skipped status.
+    """
     l = int(block)
     active_users = [int(k) for k, flag in enumerate(active_mask) if float(flag) > 0.5]
 
@@ -627,6 +607,12 @@ def _plan_streaming_block_with_joint_blocklength_vector(
     *,
     inference_counters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Choose a joint blocklength vector for a shared-BS network.
+
+    What: start all active users at ``T_k``, evaluate one full-BS beam, repeatedly accept
+    the best feasible one-step change in the joint n vector, then recompute final service.
+    Why: a shared model's beam depends on all users' n values, so n must be queried jointly.
+    """
     active_mask = [1 if int(target_bits_by_user[int(k)]) > 0 else 0 for k in range(system.K)]
     initial_n_targets = [
         int(system.T[int(k)]) if int(active_mask[int(k)]) > 0 else 0
@@ -710,6 +696,12 @@ def _plan_streaming_block_one_user_change_at_a_time(
     *,
     inference_counters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Choose shared-BS blocklengths with order-controlled per-user reductions.
+
+    Each round gives every active user at most one reduction attempt and accepts an attempt
+    only when the resulting full-BS output remains jointly feasible. This is the alternative
+    to selecting the globally best joint transition at each round.
+    """
     active_mask = [1 if int(target_bits_by_user[int(k)]) > 0 else 0 for k in range(system.K)]
     initial_n_targets = [
         int(system.T[int(k)]) if int(active_mask[int(k)]) > 0 else 0
@@ -792,35 +784,46 @@ def _plan_streaming_block_one_user_change_at_a_time(
     }
 
 
-def _estimate_initial_latency_from_random_precoders_for_scenario(
+def _failed_random_precoder_baseline(system: DownlinkSystem, error: RuntimeError):
+    return (
+        [float("nan") for _ in range(int(system.K))],
+        {
+            "completed": False,
+            "failure_reason": str(error),
+            "remaining_bits": [int(value) for value in system.B],
+            "n_kl": [[] for _ in range(int(system.K))],
+            "B_kl": [[] for _ in range(int(system.K))],
+            "R_alloc": [[] for _ in range(int(system.K))],
+        },
+        {},
+    )
+
+
+def _estimate_streaming_random_precoder_baseline(
     system: DownlinkSystem,
     sim_params: dict[str, Any],
     scenario: dict[str, Any],
     allow_n_reduction: bool = True,
 ) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
     try:
-        return shared_estimate_initial_latency_from_random_precoders_for_scenario(
-            system,
-            sim_params,
-            scenario,
-            allow_n_reduction=allow_n_reduction,
+        return estimate_random_precoder_streaming_latency(
+            system, sim_params, scenario, allow_n_reduction=allow_n_reduction
         )
     except RuntimeError as error:
-        # A random reference can be physically unable to deliver one bit in a
-        # low-SNR, strict-FBL episode. Keep the test result, but do not turn a
-        # non-completing reference into a fake latency improvement.
-        return (
-            [float("nan") for _ in range(int(system.K))],
-            {
-                "completed": False,
-                "failure_reason": str(error),
-                "remaining_bits": [int(value) for value in system.B],
-                "n_kl": [[] for _ in range(int(system.K))],
-                "B_kl": [[] for _ in range(int(system.K))],
-                "R_alloc": [[] for _ in range(int(system.K))],
-            },
-            {},
+        return _failed_random_precoder_baseline(system, error)
+
+
+def _estimate_payload_random_precoder_baseline(
+    system: DownlinkSystem,
+    sim_params: dict[str, Any],
+    allow_n_reduction: bool = True,
+) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
+    try:
+        return estimate_random_precoder_payload_latency(
+            system, sim_params, allow_n_reduction=allow_n_reduction
         )
+    except RuntimeError as error:
+        return _failed_random_precoder_baseline(system, error)
 
 
 def _evaluate_downlink_precoder_network_for_streaming(
@@ -835,13 +838,17 @@ def _evaluate_downlink_precoder_network_for_streaming(
     train_seeds: Sequence[int] | None,
     training_dataset_sizes: Sequence[int] | None,
 ) -> dict[str, Any]:
+    """Run trained-network inference over the complete no-carryover streaming horizon.
+
+    It grows channel state, allocates every block, and assembles the final test record.
+    """
     initial_snr_db, initial_sinr_db = system.get_snr_sinr_db()
-    initial_latency, initial_plan, initial_interference_diag = _estimate_initial_latency_from_random_precoders_for_scenario(
+    initial_latency, initial_plan, initial_interference_diag = _estimate_streaming_random_precoder_baseline(
         system,
         sim_params,
         scenario,
     )
-    naive_full_t_latency, naive_full_t_plan, _ = _estimate_initial_latency_from_random_precoders_for_scenario(
+    naive_full_t_latency, naive_full_t_plan, _ = _estimate_streaming_random_precoder_baseline(
         system,
         sim_params,
         scenario,
@@ -1177,7 +1184,7 @@ def _evaluate_downlink_precoder_network_for_streaming(
     final_snr_db, final_sinr_db = system.get_snr_sinr_db()
     final_interference_diag = collect_interference_diagnostics(system)
 
-    return build_evaluation_result(
+    return build_monte_carlo_evaluation_result(
         system=system,
         sim_params=sim_params,
         method_name=method_name,
@@ -1223,6 +1230,11 @@ def evaluate_downlink_precoder_net(
     train_seeds: Sequence[int] | None = None,
     training_dataset_sizes: Sequence[int] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate trained downlink networks without updating their parameters.
+
+    The selected scenario allocator queries the same n-aware models, commits a
+    jointly power-feasible BS precoder, and returns schedule-level diagnostics.
+    """
     scenario = build_experiment_scenario(system.sc, sim_params, seed=int(system.seed))
     if str(scenario["mode"]) == STREAMING_MODE:
         return _evaluate_downlink_precoder_network_for_streaming(
@@ -1237,15 +1249,13 @@ def evaluate_downlink_precoder_net(
             training_dataset_sizes=training_dataset_sizes,
         )
     initial_snr_db, initial_sinr_db = system.get_snr_sinr_db()
-    initial_latency, initial_plan, initial_interference_diag = _estimate_initial_latency_from_random_precoders_for_scenario(
+    initial_latency, initial_plan, initial_interference_diag = _estimate_payload_random_precoder_baseline(
         system,
         sim_params,
-        scenario,
     )
-    naive_full_t_latency, naive_full_t_plan, _ = _estimate_initial_latency_from_random_precoders_for_scenario(
+    naive_full_t_latency, naive_full_t_plan, _ = _estimate_payload_random_precoder_baseline(
         system,
         sim_params,
-        scenario,
         allow_n_reduction=False,
     )
     objective_mode = validate_convergence_objective_mode(sim_params)
@@ -1585,7 +1595,7 @@ def evaluate_downlink_precoder_net(
     final_interference_diag = collect_interference_diagnostics(system)
     model_scope = validate_downlink_precoder_net_scope(sim_params.get("downlink_precoder_net_scope", "per_user_nets"))
 
-    return build_evaluation_result(
+    return build_monte_carlo_evaluation_result(
         system=system,
         sim_params=sim_params,
         method_name=method_name,

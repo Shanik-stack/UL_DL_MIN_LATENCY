@@ -19,7 +19,7 @@ METHOD_SPECS: dict[tuple[str, str], dict[str, Any]] = {
         "convergence",
     ): {
         "display_name": "Uplink | Convergence per epoch",
-        "supports_quiet": False,
+        "supports_quiet": True,
     },
     (
         "uplink",

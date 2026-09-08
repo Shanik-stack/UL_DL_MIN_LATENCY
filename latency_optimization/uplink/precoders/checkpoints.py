@@ -18,6 +18,7 @@ def export_user_model_specs(
     transmit_antennas: Sequence[int],
     streams: Sequence[int],
 ) -> list[dict[str, int | str]]:
+    """Record architecture and shape metadata needed to reconstruct uplink models."""
     return [
         {
             "Nr": int(receive_antennas[user]),
@@ -30,6 +31,7 @@ def export_user_model_specs(
 
 
 def export_user_model_states(models: Sequence[nn.Module]) -> list[dict[str, Any]]:
+    """Copy uplink model parameters to CPU for portable checkpoint persistence."""
     return [
         {name: value.detach().cpu() for name, value in model.state_dict().items()}
         for model in models
@@ -42,6 +44,7 @@ def load_user_precoder_models(
     *,
     device: torch.device = DEVICE,
 ) -> list[nn.Module]:
+    """Rebuild uplink user models and restore checkpoint parameters for inference."""
     if len(model_specs) != len(model_states):
         raise ValueError("Uplink model specification and state counts must match.")
     models = []

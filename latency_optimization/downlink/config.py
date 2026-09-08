@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 from latency_optimization.core.blocklength import validate_n_search_direction, validate_n_search_strategy
@@ -61,6 +61,8 @@ ALLOWED_SIMULATION_KEYS = {
     "n_search_exponential_factor",
     "monte_carlo_test_n_search_direction",
     "monte_carlo_test_n_search_strategy",
+    "monte_carlo_test_n_search_coarse_step",
+    "monte_carlo_test_n_search_exponential_factor",
 }
 
 
@@ -95,6 +97,7 @@ def _resolve_downlink_block_power_budget(power_values: np.ndarray) -> float:
 
 
 def load_config(cfg_name: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Load and strictly validate one downlink experiment configuration."""
     document = load_config_document(cfg_name)
     cfg = document.data
 
@@ -117,14 +120,8 @@ def load_config(cfg_name: str) -> tuple[dict[str, Any], dict[str, Any], dict[str
         "snr_db": _as_array(test_cfg["snr_db"], K, "snr_db", float),
         "epsilon": _as_array(test_cfg["epsilon"], K, "epsilon", float),
         "T": _as_array(test_cfg["T"], K, "T", int),
-        "initial_bits_per_symbol": _as_array(
-            test_cfg["initial_bits_per_symbol"], K, "initial_bits_per_symbol", float
-        ),
     }
     system_params["block_power_budget"] = _resolve_downlink_block_power_budget(system_params["P"])
-    system_params["initial_latency"] = (
-        system_params["B"] / system_params["initial_bits_per_symbol"]
-    ) / system_params["fs"]
 
     sim_cfg_raw = cfg.get("simulation", {})
     _validate_simulation_keys(sim_cfg_raw)
@@ -179,6 +176,18 @@ def load_config(cfg_name: str) -> tuple[dict[str, Any], dict[str, Any], dict[str
         ),
         "n_search_coarse_step": int(sim_cfg_raw.get("n_search_coarse_step", int(n_range.get("step", 1)))),
         "n_search_exponential_factor": int(sim_cfg_raw.get("n_search_exponential_factor", 2)),
+        "monte_carlo_test_n_search_direction": validate_n_search_direction(
+            sim_cfg_raw.get("monte_carlo_test_n_search_direction", sim_cfg_raw.get("n_search_direction", "descending"))
+        ),
+        "monte_carlo_test_n_search_strategy": validate_n_search_strategy(
+            sim_cfg_raw.get("monte_carlo_test_n_search_strategy", sim_cfg_raw.get("n_search_strategy", "fixed_step"))
+        ),
+        "monte_carlo_test_n_search_coarse_step": int(
+            sim_cfg_raw.get("monte_carlo_test_n_search_coarse_step", sim_cfg_raw.get("n_search_coarse_step", int(n_range.get("step", 1))))
+        ),
+        "monte_carlo_test_n_search_exponential_factor": int(
+            sim_cfg_raw.get("monte_carlo_test_n_search_exponential_factor", sim_cfg_raw.get("n_search_exponential_factor", 2))
+        ),
         "n_kl_reduction_update_scope": "all_active_users",
         "monte_carlo_training_max_epochs": int(
             sim_cfg_raw.get("monte_carlo_training_max_epochs", max_epochs)

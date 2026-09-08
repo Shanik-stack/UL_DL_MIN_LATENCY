@@ -108,6 +108,18 @@ class ExperimentScenarioTests(unittest.TestCase):
                 max_total_blocks=20,
             )
 
+    def test_per_user_values_do_not_broadcast_scalars(self) -> None:
+        with self.assertRaisesRegex(ValueError, "one value per user"):
+            validate_experiment_scenario_config(
+                {
+                    "mode": PAYLOAD_MODE,
+                    "payload_bits_source": "explicit",
+                    "payload_bits_values": 10,
+                },
+                system_params=self.system_params,
+                max_total_blocks=20,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -39,10 +39,10 @@ from latency_optimization.results.persistence import (
 )
 from latency_optimization.runtime import DEVICE
 
-from ...config import (
+from ...config import load_config
+from ...objective_settings import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    load_config,
     validate_uplink_beam_reward_mode,
     validate_uplink_objective_mode,
 )
@@ -223,7 +223,6 @@ def _enrich_uplink_exhaustive_catalogs(exhaustive_summary: dict, fs_per_user: li
 
 def _prepare_frozen_episode(
     system_params: dict,
-    sim_cfg: dict,
     *,
     seed: int,
     max_blocks: int,
@@ -323,7 +322,6 @@ def _build_exact_action_solver(
         dk = int(frozen_system.dk[user])
         sigma2 = float(frozen_system.sigma2[user])
         epsilon = float(frozen_system.epsilon[user])
-        fs = float(frozen_system.fs[user])
         T_user = int(frozen_system.T[user])
         H_kl = torch.tensor(
             np.asarray(frozen_system.H[user][block], dtype=np.complex64),
@@ -463,15 +461,12 @@ def _run_current_online_strategy(
 ) -> dict:
     system = copy.deepcopy(frozen_system)
     K = int(system.K)
-    remaining_bits_by_user = [int(v) for v in system.B]
-    block_index_by_user = [0 for _ in range(K)]
     per_user_actions: list[list[dict]] = [[] for _ in range(K)]
 
     for k in range(K):
         B_rem = int(system.B[k])
         ell = 0
         while B_rem > 0 and ell < int(max_blocks):
-            block_index_by_user[k] = int(ell)
             initial_precoder = np.asarray(system.F[k][ell], dtype=np.complex64)
             precoder_param = complex_parameter(initial_precoder, device=DEVICE)
             user_optimizer = torch.optim.Adam([precoder_param], lr=float(sim_cfg["lr_net"]))
@@ -488,8 +483,6 @@ def _run_current_online_strategy(
                     optimizer=user_optimizer,
                     precoder_param=precoder_param,
                     interference_F_snapshot=None,
-                    remaining_bits_by_user=remaining_bits_by_user,
-                    block_index_by_user=block_index_by_user,
                 )
 
             if len(trajectory) == 0 or int(B_used) <= 0:
@@ -511,8 +504,9 @@ def _run_current_online_strategy(
             best = trajectory[-1]
             chosen_n = int(best["n_kl"])
             chosen_bits = int(B_used)
+            chosen_precoder = np.asarray(best["F"].detach().cpu().numpy(), dtype=np.complex64)
             system.n_kl[k][ell] = int(chosen_n)
-            system.F[k][ell] = np.asarray(best["F"].detach().cpu().numpy(), dtype=np.complex64)
+            system.F[k][ell] = chosen_precoder
             per_user_actions[k].append(
                 {
                     "user": int(k),
@@ -527,13 +521,11 @@ def _run_current_online_strategy(
                     "rate_gap": float(max(float(chosen_bits) / max(float(chosen_n), 1.0) - float(best["R_fbl"]), 0.0)),
                     "power_gap": float(best.get("F_power", 0.0) - float(system.P[k])),
                     "solve_status": str(best.get("solve_status", "unknown")),
-                    "F": np.asarray(best["F"].detach().cpu().numpy(), dtype=np.complex64),
+                    "F": chosen_precoder.copy(),
                 }
             )
             B_rem = max(0, int(B_rem) - int(chosen_bits))
-            remaining_bits_by_user[k] = int(B_rem)
             ell += 1
-            block_index_by_user[k] = int(ell)
 
         if B_rem > 0 and ell >= int(max_blocks):
             per_user_actions[k].append(
@@ -1170,7 +1162,6 @@ def run_exhaustive_payload_compare(
     overall_start = perf_counter()
     frozen_system = _prepare_frozen_episode(
         system_params,
-        sim_cfg,
         seed=int(seed),
         max_blocks=int(max_blocks),
     )

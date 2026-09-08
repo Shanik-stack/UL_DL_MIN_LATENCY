@@ -1,0 +1,57 @@
+
+|| ---------------- USER 0 ---------------- ||
+R_fbl: Initial [3.68207359] -> Final [5.627691745758057]
+n_kl: Initial [12] -> Final [12]
+N_k: Initial 12 -> Final 12
+B_tx_kl: Initial [44] -> Final [67]
+Bits per symbol: Initial avg 3.6666666666666665, per block [3.6666666666666665] -> Final [5.58333333]
+SNR_dB: Initial 3.6713 -> Final 2.9863
+SINR_dB: Initial -2.7445 -> Final -3.2511
+Target bits per block: [80]
+Initial unserved bits per block: [36]
+Final unserved bits per block: [13]
+
+|| ---------------- USER 1 ---------------- ||
+R_fbl: Initial [5.91469097] -> Final [8.920890808105469]
+n_kl: Initial [14] -> Final [14]
+N_k: Initial 14 -> Final 14
+B_tx_kl: Initial [82] -> Final [120]
+Bits per symbol: Initial avg 5.857142857142857, per block [5.857142857142857] -> Final [8.57142857]
+SNR_dB: Initial 6.3685 -> Final 5.2678
+SINR_dB: Initial -3.1909 -> Final -4.2199
+Target bits per block: [120]
+Initial unserved bits per block: [38]
+Final unserved bits per block: [0]
+
+|| ---------------- USER 2 ---------------- ||
+R_fbl: Initial [3.9729023] -> Final [5.47850227355957]
+n_kl: Initial [16] -> Final [16]
+N_k: Initial 16 -> Final 16
+B_tx_kl: Initial [63] -> Final [87]
+Bits per symbol: Initial avg 3.9375, per block [3.9375] -> Final [5.4375]
+SNR_dB: Initial 0.4428 -> Final 1.2226
+SINR_dB: Initial -6.0628 -> Final -4.6216
+Target bits per block: [160]
+Initial unserved bits per block: [97]
+Final unserved bits per block: [73]
+
+Initial latency per user:
+[0.0008     0.00093333 0.00106667]
+
+Final latency per user:
+[0.0008     0.00093333 0.00106667]
+Latency reduction per user (%): [0. 0. 0.]
+Total latency reduction (%): 0.0
+
+Initial asynchronality:
+User 0 - User 1: 0.00013333333333333329
+User 0 - User 2: 0.0002666666666666667
+User 1 - User 2: 0.0001333333333333334
+Initial sum of asynchronality: 0.0005333333333333334
+
+Final asynchronality:
+User 0 - User 1: 0.00013333333333333329
+User 0 - User 2: 0.0002666666666666667
+User 1 - User 2: 0.0001333333333333334
+Final sum of asynchronality: 0.0005333333333333334
+Asynchronality reduction (%): 0.0

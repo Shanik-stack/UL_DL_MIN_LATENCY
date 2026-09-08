@@ -11,6 +11,7 @@ import numpy as np
 def pairwise_latency_differences(
     latencies: Sequence[float],
 ) -> tuple[list[list[float]], list[dict[str, float]], float]:
+    """Compute each unique user-pair latency gap and their asynchronality sum."""
     values = [float(value) for value in latencies]
     matrix = [[abs(first - second) for second in values] for first in values]
     pairs = [
@@ -22,6 +23,7 @@ def pairwise_latency_differences(
 
 
 def mean_for_active_users(values: Sequence[float], activity: Sequence[int]) -> float | None:
+    """Average finite values only over users with at least one served block."""
     selected = [
         float(value)
         for value, count in zip(values, activity)
@@ -66,6 +68,7 @@ def reference_latency_metrics(
     *,
     reference_completed: bool = True,
 ) -> dict[str, Any]:
+    """Compare a final schedule with one baseline in latency and asynchronality terms."""
     initial = [float(value) for value in reference_latency]
     final = [float(value) for value in final_latency]
     if not reference_completed or not np.all(np.isfinite(initial)):

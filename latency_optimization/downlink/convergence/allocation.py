@@ -1,7 +1,7 @@
 """Downlink payload scheduling and blocklength allocation."""
 
 import copy
-from typing import Any, List, Sequence
+from typing import Any, List
 
 import numpy as np
 
@@ -10,8 +10,8 @@ from latency_optimization.results.console import format_latency_log_line, format
 from latency_optimization.results.metrics import build_schedule_reference as _build_initial_baseline_reference
 
 from ..baselines import (
-    estimate_initial_latency_from_random_precoders as estimate_random_precoder_latency,
-    estimate_initial_latency_from_random_precoders_for_scenario as estimate_random_precoder_latency_for_scenario,
+    estimate_random_precoder_payload_latency,
+    estimate_random_precoder_streaming_latency,
 )
 from ..block_state import (
     collect_interference_diagnostics,
@@ -52,16 +52,21 @@ def _optimize_payload(
     method_name: str,
     objective_mode: str,
 ) -> dict[str, Any]:
+    """Allocate a finite payload across generated channel blocks.
+
+    Each block first optimizes service at full blocklength, commits feasible
+    bits, then searches smaller blocklengths only after the request is served.
+    """
     objective_mode = validate_objective_mode(objective_mode)
     model_scope = validate_downlink_precoder_net_scope(sim_params.get("downlink_precoder_net_scope", "per_user_nets"))
     update_mode = validate_convergence_precoder_update_mode(sim_params)
     configured_weight_strategy = validate_convergence_priority_weight_strategy(sim_params)
     initial_snr_db, initial_sinr_db = system.get_snr_sinr_db()
-    initial_latency, initial_plan, initial_interference_diag = estimate_random_precoder_latency(
+    initial_latency, initial_plan, initial_interference_diag = estimate_random_precoder_payload_latency(
         system,
         sim_params,
     )
-    naive_full_t_latency, naive_full_t_plan, _ = estimate_random_precoder_latency(
+    naive_full_t_latency, naive_full_t_plan, _ = estimate_random_precoder_payload_latency(
         system,
         sim_params,
         allow_n_reduction=False,
@@ -393,6 +398,11 @@ def _optimize_streaming_blocks(
     method_name: str,
     objective_mode: str,
 ) -> dict[str, Any]:
+    """Optimize independent fixed-bit streaming requests over a finite horizon.
+
+    Unserved bits are recorded for their block and are never carried into the
+    next block; skipped blocks therefore still contribute their full duration.
+    """
     objective_mode = validate_objective_mode(objective_mode)
     scenario = build_experiment_scenario(system.sc, sim_params, seed=int(system.seed))
     block_targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
@@ -401,12 +411,12 @@ def _optimize_streaming_blocks(
     configured_weight_strategy = validate_convergence_priority_weight_strategy(sim_params)
 
     initial_snr_db, initial_sinr_db = system.get_snr_sinr_db()
-    initial_latency, initial_plan, initial_interference_diag = estimate_random_precoder_latency_for_scenario(
+    initial_latency, initial_plan, initial_interference_diag = estimate_random_precoder_streaming_latency(
         system,
         sim_params,
         scenario,
     )
-    naive_full_t_latency, naive_full_t_plan, _ = estimate_random_precoder_latency_for_scenario(
+    naive_full_t_latency, naive_full_t_plan, _ = estimate_random_precoder_streaming_latency(
         system,
         sim_params,
         scenario,
@@ -752,6 +762,10 @@ def optimize_downlink_transmission(
     sim_params: dict[str, Any],
     verbose: bool = True,
 ) -> dict[str, Any]:
+    """Dispatch the training-only downlink method to payload or streaming allocation.
+
+    This is the convergence method's public entry point used by the experiment runner.
+    """
     objective_mode = validate_convergence_objective_mode(sim_params)
     scenario = build_experiment_scenario(system.sc, sim_params, seed=int(system.seed))
     if str(scenario["mode"]) == STREAMING_MODE:

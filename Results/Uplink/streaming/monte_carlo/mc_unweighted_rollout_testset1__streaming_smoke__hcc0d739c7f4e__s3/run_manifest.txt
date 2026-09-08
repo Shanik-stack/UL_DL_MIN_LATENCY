@@ -1,0 +1,95 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Monte Carlo
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_streaming_smoke.yaml
+config_hash: cc0d739c7f4e
+train_seeds: [1]
+test_seed: 3
+test_seeds: [3]
+training_artifact_reused: None
+run_started_at_local: 2026-09-08T12:57:20+03:00
+run_completed_at_local: 2026-09-08T12:57:41+03:00
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\streaming\monte_carlo\mc_unweighted_rollout_testset1__streaming_smoke__hcc0d739c7f4e__s3
+Files recorded: 60
+Result artifacts: 58
+Plots: 38
+Empty directories removed: 6
+Zero-byte files: 0
+
+Files by section
+- testing: 36
+- training: 22
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\blocks\manifest.json
+- testing\blocks\seed_0003.npz
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt
+- testing\samples\seed_0003\data\dispersion_diagnostics.txt
+- testing\samples\seed_0003\data\experiment_scenario.json
+- testing\samples\seed_0003\data\experiment_scenario.txt
+- testing\samples\seed_0003\data\result.json
+- testing\samples\seed_0003\data\summary.txt
+- testing\samples\seed_0003\data\test_results.json
+- testing\samples\seed_0003\data\test_results.txt
+- testing\samples\seed_0003\interference\interference_before_after_heatmaps.png
+- testing\samples\seed_0003\interference\interference_heatmaps.png
+- testing\samples\seed_0003\interference\per_user_interference_before_after.png
+- testing\samples\seed_0003\interference\per_user_interference_profiles.png
+- testing\samples\seed_0003\latency_asynchronality\test_async_distribution.png
+- testing\samples\seed_0003\latency_asynchronality\test_final_async_heatmap.png
+- testing\samples\seed_0003\latency_asynchronality\test_initial_async_heatmap.png
+- testing\samples\seed_0003\latency_asynchronality\test_latency_comparison.png
+- testing\samples\seed_0003\latency_asynchronality\test_latency_histogram.png
+- testing\samples\seed_0003\link_quality\test_link_quality_comparison.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user0_Fchange_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user0_Fincrement_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user0_Fpower_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user0_Rfbl_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user1_Fchange_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user1_Fincrement_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user1_Fpower_vs_n.png
+- testing\samples\seed_0003\optimization_history\F_vs_n\user1_Rfbl_vs_n.png
+- testing\samples\seed_0003\optimization_history\testing_optimization_user0_block0.png
+- testing\samples\seed_0003\optimization_history\testing_optimization_user1_block0.png
+- testing\samples\seed_0003\optimization_history\testing_user0_summary.png
+- testing\samples\seed_0003\optimization_history\testing_user1_summary.png
+- testing\samples\seed_0003\schedule_details\per_user_schedule_details.png
+- testing\samples\seed_0003\user_config\user_config_summary.png
+
+[training]
+- training\blocks\manifest.json
+- training\blocks\seed_0001.npz
+- training\data\experiment_scenarios.json
+- training\data\experiment_scenarios.txt
+- training\data\post_training_summary.json
+- training\data\post_training_summary.txt
+- training\data\train_artifact.pt
+- training\data\training_dataset_summary.json
+- training\data\training_dataset_summary.txt
+- training\evaluation\F_vs_n\all_users_Rfbl_vs_n_with_epoch.png
+- training\evaluation\F_vs_n\user0_Fchange_vs_n.png
+- training\evaluation\F_vs_n\user0_Fincrement_vs_n.png
+- training\evaluation\F_vs_n\user0_Fpower_vs_n.png
+- training\evaluation\F_vs_n\user0_Rfbl_vs_n.png
+- training\evaluation\F_vs_n\user1_Fchange_vs_n.png
+- training\evaluation\F_vs_n\user1_Fincrement_vs_n.png
+- training\evaluation\F_vs_n\user1_Fpower_vs_n.png
+- training\evaluation\F_vs_n\user1_Rfbl_vs_n.png
+- training\evaluation\training_evaluation_optimization_user0_block0.png
+- training\evaluation\training_evaluation_optimization_user1_block0.png
+- training\optimization_history\training_user0_summary.png
+- training\optimization_history\training_user1_summary.png

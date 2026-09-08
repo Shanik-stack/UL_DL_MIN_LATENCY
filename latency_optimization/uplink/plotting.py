@@ -73,7 +73,7 @@ def _extract_uplink_epoch_rate_panel_data(plot_data, user_idx):
     separators = []
     cursor = 0.0
     for block_idx, block_states in enumerate(all_user_block_results[user_idx] or []):
-        for solve_idx, state in enumerate(block_states or []):
+        for state in block_states or []:
             kkt_history = list(state.get("kkt_history", []))
             if len(kkt_history) == 0:
                 continue

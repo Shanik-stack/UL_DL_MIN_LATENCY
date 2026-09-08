@@ -1,0 +1,24 @@
+Uplink dispersion diagnostics
+
+Terms
+Capacity C: realized-block conditional capacity used by the simulator.
+Dispersion V: realized-block conditional dispersion term used by the simulator.
+Finite-blocklength penalty: C - R_fbl for the accepted served block.
+Penalty/C ratio: fraction of realized capacity removed by the finite-blocklength penalty.
+
+Accepted served blocks: 8
+Average capacity C: 9.673320
+Average dispersion V: 7.726920
+Average finite-blocklength penalty: 5.901416
+Average penalty/C ratio: 0.658185
+Maximum penalty/C ratio: 0.827525
+
+Per accepted block
+user=0 | block=0 | served_bits=80 | n_kl=9 | C=17.233597 | V=8.292663 | penalty=7.343929 | penalty_over_C=0.426140 | achieved_R_fbl=9.889668 | required_rate=8.888889 | margin=1.000779
+user=1 | block=0 | served_bits=21 | n_kl=14 | C=7.145590 | V=7.452008 | penalty=5.581817 | penalty_over_C=0.781155 | achieved_R_fbl=1.563774 | required_rate=1.500000 | margin=0.063774
+user=1 | block=1 | served_bits=29 | n_kl=14 | C=7.661961 | V=7.471124 | penalty=5.588971 | penalty_over_C=0.729444 | achieved_R_fbl=2.072990 | required_rate=2.071429 | margin=0.001561
+user=1 | block=2 | served_bits=37 | n_kl=14 | C=8.333654 | V=7.659939 | penalty=5.659153 | penalty_over_C=0.679072 | achieved_R_fbl=2.674501 | required_rate=2.642857 | margin=0.031644
+user=1 | block=3 | served_bits=18 | n_kl=14 | C=6.871092 | V=7.358313 | penalty=5.546614 | penalty_over_C=0.807239 | achieved_R_fbl=1.324479 | required_rate=1.285714 | margin=0.038764
+user=1 | block=4 | served_bits=15 | n_kl=13 | C=6.974238 | V=7.397641 | penalty=5.771356 | penalty_over_C=0.827525 | achieved_R_fbl=1.202882 | required_rate=1.153846 | margin=0.049036
+user=2 | block=0 | served_bits=103 | n_kl=16 | C=11.946687 | V=8.164671 | penalty=5.465276 | penalty_over_C=0.457472 | achieved_R_fbl=6.481411 | required_rate=6.437500 | margin=0.043911
+user=2 | block=1 | served_bits=57 | n_kl=12 | C=11.219741 | V=8.018998 | penalty=6.254210 | penalty_over_C=0.557429 | achieved_R_fbl=4.965530 | required_rate=4.750000 | margin=0.215530

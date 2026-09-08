@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import STREAMING_MODE
+from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE
 
 from .block_state import (
     collect_interference_diagnostics,
@@ -56,19 +56,29 @@ def _allocate_random_precoder_bits(
     return bits_sent, int(best["n_kl"]), float(best["result"]["rate"])
 
 
-def estimate_initial_latency_from_random_precoders_for_scenario(
+def _estimate_random_precoder_schedule(
     system: DownlinkSystem,
     simulation: dict[str, Any],
-    scenario: dict[str, Any],
+    streaming_targets: np.ndarray | None,
     allow_n_reduction: bool = True,
 ) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
+    """Evaluate the deterministic random-beam reference under common scheduling rules.
+
+    What: reproduce the seeded downlink system, sample and jointly power-project one
+    random beam per active user/block, then apply the same FBL-rate and blocklength
+    search used to account for service. Payload bits carry forward until completion;
+    streaming targets expire at the end of each block.
+
+    Why: optimized and closed-form methods need a method-independent initial point.
+    Reusing the same seed, rate law, traffic semantics, and latency accounting means
+    reported improvement reflects the beam/allocation method rather than a different
+    baseline realization.
+
+    Returns: per-user latency, the complete schedule/diagnostic record, and the final
+    system metrics generated from that random-precoder plan.
+    """
     baseline = DownlinkSystem(system.sc, seed=system.seed, rate_law=system.rate_law)
-    streaming = str(scenario["mode"]) == STREAMING_MODE
-    streaming_targets = (
-        np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
-        if streaming
-        else None
-    )
+    streaming = streaming_targets is not None
     remaining = np.asarray(baseline.B, dtype=int).copy()
     precoders = baseline.clone_precoders()
     n_plan = [[] for _ in range(baseline.K)]
@@ -77,7 +87,7 @@ def estimate_initial_latency_from_random_precoders_for_scenario(
     skipped_blocks = [0 for _ in range(baseline.K)]
     block = 0
 
-    while (block < int(scenario["number_of_blocks"])) if streaming else bool(np.any(remaining > 0)):
+    while (block < int(streaming_targets.shape[1])) if streaming else bool(np.any(remaining > 0)):
         if block >= int(simulation["max_total_blocks"]):
             raise RuntimeError(
                 f"Random-precoder baseline reached max_total_blocks={simulation['max_total_blocks']} "
@@ -112,27 +122,49 @@ def estimate_initial_latency_from_random_precoders_for_scenario(
         block += 1
 
     baseline.apply_solution(expand_precoders_for_plan(baseline, precoders, n_plan), n_plan)
-    plan: dict[str, Any] = {"n_kl": n_plan, "B_kl": bit_plan, "R_alloc": rate_plan}
+    plan: dict[str, Any] = {
+        "n_kl": n_plan,
+        "B_kl": bit_plan,
+        "R_alloc": rate_plan,
+        "scenario_mode": STREAMING_MODE if streaming else PAYLOAD_MODE,
+    }
     if streaming:
         plan.update(
             {
                 "skipped_blocks_per_user": skipped_blocks,
-                "scenario_mode": STREAMING_MODE,
                 "scenario_block_targets": streaming_targets.tolist(),
             }
         )
     return baseline.latency.tolist(), plan, collect_interference_diagnostics(baseline)
 
 
-def estimate_initial_latency_from_random_precoders(
+def estimate_random_precoder_payload_latency(
     system: DownlinkSystem,
     simulation: dict[str, Any],
     allow_n_reduction: bool = True,
 ) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
-    scenario = {"mode": "payload_completion", "number_of_blocks": 0}
-    return estimate_initial_latency_from_random_precoders_for_scenario(
+    """Evaluate the shared random-beam reference for payload completion."""
+    return _estimate_random_precoder_schedule(
         system,
         simulation,
-        scenario,
+        None,
+        allow_n_reduction=allow_n_reduction,
+    )
+
+
+def estimate_random_precoder_streaming_latency(
+    system: DownlinkSystem,
+    simulation: dict[str, Any],
+    scenario: dict[str, Any],
+    allow_n_reduction: bool = True,
+) -> tuple[list[float], dict[str, Any], dict[str, Any]]:
+    """Evaluate the shared random-beam reference for fixed streaming blocks."""
+    if str(scenario["mode"]) != STREAMING_MODE:
+        raise ValueError("Streaming baseline requires a streaming scenario.")
+    targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
+    return _estimate_random_precoder_schedule(
+        system,
+        simulation,
+        targets,
         allow_n_reduction=allow_n_reduction,
     )

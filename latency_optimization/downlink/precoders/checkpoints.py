@@ -35,6 +35,7 @@ def export_user_model_specs(
     model_scope: str,
     context_max_dk: int | None = None,
 ) -> list[dict[str, int | bool | str]]:
+    """Record architecture and shape metadata needed to reconstruct downlink models."""
     scope = validate_downlink_precoder_net_scope(model_scope)
     input_mode = BLOCKLENGTH_AWARE_INPUT if uses_blocklength_input else CHANNEL_ONLY_INPUT
     return [
@@ -54,6 +55,7 @@ def export_user_model_specs(
 
 
 def export_user_model_states(models: Sequence[nn.Module]) -> list[dict[str, Any]]:
+    """Copy model parameters to CPU for portable checkpoint persistence."""
     return [{key: value.detach().cpu() for key, value in model.state_dict().items()} for model in models]
 
 
@@ -75,7 +77,6 @@ def _build_model_from_spec(spec: dict[str, Any], device: torch.device) -> nn.Mod
         return builder(max_dk=int(spec["context_max_dk"]), **common)
     if input_mode == BLOCKLENGTH_AWARE_INPUT:
         return build_user_precoder_net_with_blocklength(
-            int(spec["nr"]),
             int(spec["nb"]),
             int(spec["dk"]),
             **common,
@@ -94,6 +95,7 @@ def load_user_precoder_models(
     *,
     device: torch.device = DEVICE,
 ) -> list[nn.Module]:
+    """Reconstruct downlink models and restore saved parameters for testing."""
     if len(model_specs) != len(model_states):
         raise ValueError("Model specification and state counts must match.")
     if not model_specs:

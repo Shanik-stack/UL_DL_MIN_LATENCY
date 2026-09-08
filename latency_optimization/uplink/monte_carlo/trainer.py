@@ -11,11 +11,12 @@ from latency_optimization.experiments.channels import with_monte_carlo_sample_sn
 from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
 from latency_optimization.precoders.model_state import clone_model_state, relative_model_state_change
 from latency_optimization.results.console import format_log_line, format_progress_log_line
+from latency_optimization.core.scenarios import STREAMING_MODE
 
-from ..config import (
+from ..config import load_config
+from ..objective_settings import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    load_config,
     validate_uplink_objective_mode,
 )
 from ..precoders.checkpoints import (
@@ -24,7 +25,10 @@ from ..precoders.checkpoints import (
 )
 from ..precoders.inference import infer_precoder
 from ..precoders.models import build_user_precoder_net
-from ..simulation import estimate_initial_random_precoder_schedule_for_scenario
+from ..simulation import (
+    estimate_initial_random_precoder_payload_schedule,
+    estimate_initial_random_precoder_streaming_schedule,
+)
 from ..system import UplinkSystem
 
 from .network_operations import (
@@ -51,6 +55,22 @@ def train_blocklength_aware_precoder_net(
     batch_size: int = 32,
     lr: float = 1e-3,
 ) -> dict:
+    """Train one reusable, blocklength-aware uplink beamformer per user.
+
+    What: create channel-only episodes from the requested seeds, run the current
+    user networks through payload or streaming allocation, and train on the visited
+    ``(H_kl, n_kl, P_k, sigma_k^2, epsilon_k)`` states. Each user's optimizer updates
+    only that user's network by differentiating the configured FBL-rate Lagrangian;
+    there are no expert precoders and no beam-entry MSE loss.
+
+    Why: uplink users do not share a transmitter or precoder, so their trainable
+    parameters remain decoupled even though system evaluation may include receiver
+    interference. Rollout regeneration supplies the n values and later channel
+    blocks that the trained network will encounter instead of hand-building them.
+
+    Returns: the trained per-user networks together with dataset, rollout, objective,
+    KKT, and stopping summaries used by checkpoint saving and result reporting.
+    """
     system_params, sim_cfg, _ = load_config(cfg_name)
     K = int(system_params["K"])
     objective_mode = validate_uplink_objective_mode(
@@ -387,7 +407,12 @@ def train_blocklength_aware_precoder_net(
     train_eval_sim_cfg = copy.deepcopy(sim_cfg)
     if str(train_eval_sim_cfg["experiment_scenario_mode"]) == "streaming":
         train_eval_sim_cfg["experiment_scenario"]["number_of_blocks"] = 1
-    train_eval_initial_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    baseline_builder = (
+        estimate_initial_random_precoder_streaming_schedule
+        if str(sim_cfg["experiment_scenario_mode"]) == STREAMING_MODE
+        else estimate_initial_random_precoder_payload_schedule
+    )
+    train_eval_initial_baseline = baseline_builder(
         train_eval_system_params,
         train_eval_sim_cfg,
         seed=train_eval_seed,

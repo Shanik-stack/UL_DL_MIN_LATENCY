@@ -16,7 +16,17 @@ def build_joint_linear_precoders(
     active_users: Sequence[int],
     method: str,
 ) -> list[np.ndarray]:
-    """Build a conventional stacked-channel ZF or RZF BS precoder."""
+    """Construct a standard joint ZF or RZF beamformer for one downlink block.
+
+    What: vertically stack active users' channels, compute the zero-forcing
+    pseudoinverse or its noise-regularized inverse, split the resulting columns back
+    into user beam matrices, and scale the complete BS precoder to the configured
+    block power budget. Inactive users receive zero matrices.
+
+    Why: this isolates beamformer quality in the benchmark. ZF/RZF use their standard
+    closed-form channel solution, while FBL rate, blocklength search, payload service,
+    and latency accounting remain the same as for the proposed methods.
+    """
     method_name = require_choice(method, {"zf", "rzf"}, "downlink benchmark method")
 
     active = [int(user) for user in active_users]

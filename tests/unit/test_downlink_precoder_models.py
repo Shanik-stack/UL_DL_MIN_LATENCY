@@ -27,7 +27,7 @@ class DownlinkPrecoderModelTests(unittest.TestCase):
 
     def test_per_user_blocklength_model_output_shape(self) -> None:
         model = build_user_precoder_net_with_blocklength(
-            2, 3, 2, k_count=2, max_nr=2, max_nb=3
+            3, 2, k_count=2, max_nr=2, max_nb=3
         )
         output = model(
             self.channels_for(model),

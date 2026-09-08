@@ -10,6 +10,11 @@ from .system import DownlinkSystem
 
 
 def clone_precoders(precoders: Sequence[Sequence[np.ndarray]]) -> list[list[np.ndarray]]:
+    """Copy every user/block precoder matrix into independent NumPy arrays.
+
+    Why: candidate searches modify beams temporarily. A deep copy prevents a rejected
+    candidate from changing the currently accepted transmission plan.
+    """
     return [[np.array(block, copy=True) for block in user_blocks] for user_blocks in precoders]
 
 
@@ -18,6 +23,12 @@ def expand_precoders_for_plan(
     base_precoders: list[list[np.ndarray]],
     blocklength_plan: Sequence[Sequence[int]],
 ) -> list[list[np.ndarray]]:
+    """Make a precoder plan match the number of blocks in ``blocklength_plan``.
+
+    What: copy ``base_precoders`` and deterministically create one beam slot for each
+    missing ``(user, block)`` entry. Why: a schedule cannot be evaluated or committed
+    unless every selected ``n_kl`` has a corresponding ``F_kl`` matrix.
+    """
     expanded = clone_precoders(base_precoders)
     for user in range(system.K):
         for block in range(len(blocklength_plan[user])):
@@ -28,6 +39,7 @@ def expand_precoders_for_plan(
 
 
 def maximum_supported_bits(blocklength: int, rate: float) -> int:
+    """Return ``floor(n_kl * R_fbl)``: the whole bits supportable by one block."""
     return int(np.floor(float(blocklength) * float(rate)))
 
 
@@ -36,6 +48,12 @@ def resolve_blocklength(
     user: int,
     blocklengths: dict[int, int] | None,
 ) -> int:
+    """Resolve the blocklength used for one user in a joint candidate evaluation.
+
+    What: read the user's override when present; otherwise use ``T_k``. Why: during
+    one-user-at-a-time search, changed and unchanged users must be evaluated together
+    with an explicit, well-defined ``n_kl`` for every user.
+    """
     user = int(user)
     if blocklengths is None:
         return int(system.T[user])
@@ -43,6 +61,7 @@ def resolve_blocklength(
 
 
 def make_zero_precoder(system: DownlinkSystem, user: int) -> np.ndarray:
+    """Create a zero ``(N_b,k, d_k)`` beam representing no transmission by a user."""
     user = int(user)
     return np.zeros((int(system.Nb[user]), int(system.dk[user])), dtype=np.complex128)
 
@@ -55,6 +74,12 @@ def ensure_precoder_block(
     *,
     use_previous_as_template: bool = True,
 ) -> None:
+    """Add missing beam entries through ``precoders[user][block]`` in place.
+
+    What: ask the system to create the matching deterministic channel/block state,
+    then append copied beams to the working plan. If enabled, a nonzero previous beam
+    initializes the new block. Why: payload schedules grow online as users need more blocks.
+    """
     user = int(user)
     block = int(block)
     if block < len(precoders[user]):
@@ -76,11 +101,18 @@ def zero_precoder_block(
     user: int,
     block: int,
 ) -> None:
+    """Set one ``F_kl`` to zero so that user contributes neither signal nor BS power."""
     user = int(user)
     precoders[user][int(block)] = make_zero_precoder(system, user)
 
 
 def channels_for_block(system: DownlinkSystem, block: int) -> list[np.ndarray]:
+    """Build the fixed-width list of user channels supplied to a shared BS network.
+
+    What: return ``H_k,l`` for users that have the block and a shape-correct zero matrix
+    otherwise. Why: the shared model always expects ``K`` channel inputs even when only
+    a subset of users is active or has reached that block.
+    """
     block = int(block)
     return [
         np.asarray(system.H[user][block], dtype=np.complex64)
@@ -96,6 +128,12 @@ def user_link_budget(
     user: int,
     block: int,
 ) -> tuple[float, float, float, float]:
+    """Decompose one user's received link budget for a specified joint beam plan.
+
+    What: compute desired power from ``H_k F_k``, interference from every ``H_k F_j``,
+    fixed noise power, and the resulting SINR in dB. Why: this exposes whether poor rate
+    came from a weak desired beam, inter-user leakage, or noise rather than only reporting R_fbl.
+    """
     user = int(user)
     block = int(block)
     channel = np.asarray(system.H[user][block], dtype=np.complex128)
@@ -118,10 +156,17 @@ def user_link_budget(
 
 
 def power_to_db(power: float) -> float:
+    """Convert nonnegative linear power to dB with a finite numerical floor."""
     return float(10.0 * np.log10(max(float(power), 1e-30)))
 
 
 def collect_interference_diagnostics(system: DownlinkSystem) -> dict[str, Any]:
+    """Measure interference for every receiver, interferer, and committed block.
+
+    What: produce desired/noise/interference matrices, pairwise interference power and
+    INR averages, interference shares, and the worst block. Why: saved diagnostics and
+    heatmaps need the same underlying measurements for all downlink methods.
+    """
     user_count = int(system.K)
     max_blocks = max((len(values) for values in system.n_kl), default=0)
     signal = np.full((user_count, max_blocks), np.nan, dtype=float)
@@ -213,6 +258,12 @@ def evaluate_block_candidate(
     block: int,
     blocklengths: dict[int, int] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate a complete joint precoder/blocklength candidate for one block.
+
+    What: compute each active user's FBL rate and ``floor(n_kl R_k)``, then summarize
+    the minimum and sum-rate behavior. Why: allocation decisions must be based on the
+    jointly transmitted beams, not on rates measured from isolated user beams.
+    """
     rates: list[float] = []
     supported_bits: list[int] = []
     resolved_blocklengths: list[int] = []

@@ -4,6 +4,7 @@ from typing import Any
 
 
 def parse_seed_list(seed_text: str) -> list[int]:
+    """Parse a comma-separated CLI seed list."""
     return [int(part.strip()) for part in str(seed_text).split(",") if part.strip()]
 
 
@@ -22,6 +23,7 @@ def build_train_seeds_from_num_training_samples(
     num_training_samples: int,
     test_seed: int,
 ) -> list[int]:
+    """Generate the requested training seeds while excluding the held-out test seed."""
     count = int(num_training_samples)
     if count < 1:
         raise ValueError("The Monte Carlo training sample count must be at least 1.")
@@ -40,6 +42,7 @@ def build_test_seeds_from_num_test_samples(
     first_test_seed: int,
     excluded_seeds: list[int],
 ) -> list[int]:
+    """Generate a contiguous held-out test-seed set excluding all training seeds."""
     count = int(num_test_samples)
     if count < 1:
         raise ValueError("The Monte Carlo test sample count must be at least 1.")
@@ -64,6 +67,7 @@ def resolve_monte_carlo_train_and_test_seeds(
     fallback_train_seeds: Any = "0,1,2",
     fallback_test_seed: int = 3,
 ) -> tuple[list[int], int]:
+    """Resolve CLI, config, and fallback seed choices using one precedence rule."""
     test_seed = int(
         cli_test_seed
         if cli_test_seed is not None

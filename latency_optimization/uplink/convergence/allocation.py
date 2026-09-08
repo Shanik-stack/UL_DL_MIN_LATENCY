@@ -9,18 +9,15 @@ from torch import nn
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
 from latency_optimization.core.scenarios import STREAMING_MODE, build_experiment_scenario
 from latency_optimization.precoders.parameters import complex_parameter
-from latency_optimization.precoders.power import cap_matrix_power_numpy
 from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
 
-from ..model_service import build_precoder_snapshot_from_models
 from ..precoders.checkpoints import (
     export_user_model_specs,
     export_user_model_states,
-    load_user_precoder_models,
 )
 from ..precoders.models import build_user_precoder_net
-from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate
+from ..uplink_rate_model import build_uplink_rate_covariance
 from ..objective import UplinkPrecoderObjective
 from .solver import (
     optimize_precoder_for_nl,
@@ -38,9 +35,12 @@ def optimize_user_blocklength_and_precoder(
     precoder_param: torch.nn.Parameter | None = None,
     interference_F_snapshot=None,
     bit_budget_role: str = "payload",
-    remaining_bits_by_user: list[int] | np.ndarray | None = None,
-    block_index_by_user: list[int] | np.ndarray | None = None,
 ):
+    """Optimize one user's beam and blocklength for one channel block.
+
+    The beam is first solved at n=T. Partial service is committed at T; only a
+    fully served request proceeds to smaller n values with fresh optimization.
+    """
     update_mode = validate_convergence_precoder_update_mode(
         sim_cfg.get("convergence_precoder_update_mode", "precoder_net")
     )
@@ -58,7 +58,6 @@ def optimize_user_blocklength_and_precoder(
     )
 
     P = float(uplinksystem.P[user])
-    Nr = int(uplinksystem.NR[user])
     Nt = int(uplinksystem.NT[user])
     dk = int(uplinksystem.dk[user])
     sigma2 = float(uplinksystem.sigma2[user])
@@ -82,15 +81,10 @@ def optimize_user_blocklength_and_precoder(
         )
     )
 
-    T = int(uplinksystem.T[user])
     n_kl_max = int(uplinksystem.T[user])
     n_kl_min = int(sim_cfg["n_kl_min"])
     n_kl_step = int(sim_cfg["n_kl_step"])
     max_epochs = max(1, int(sim_cfg["max_epochs"]))
-    reduced_n_kl_log_interval = max(1, int(sim_cfg.get("reduced_n_kl_log_interval", 1)))
-    
-    lr_net = float(sim_cfg["lr_net"])
-
     loss_fn = UplinkPrecoderObjective(
         channel=H_kl,
         noise_variance=sigma2,
@@ -414,9 +408,6 @@ def optimize_payload_with_precoder_training(
     all_user_block_results = [[] for _ in range(K)]
 
     user_precoder_models: list[nn.Module] = []
-    remaining_bits_by_user = [int(v) for v in uplinksystem.B]
-    block_index_by_user = [0 for _ in range(K)]
-
     for k in range(K):
         print(
             format_log_line(
@@ -452,8 +443,6 @@ def optimize_payload_with_precoder_training(
             # ensure block exists
             if ell >= len(uplinksystem.H[k]):
                 uplinksystem.add_block(k)
-            block_index_by_user[k] = int(ell)
-
             print(
                 format_log_line(
                     "[UL Convergence Train]",
@@ -484,8 +473,6 @@ def optimize_payload_with_precoder_training(
                 optimizer=user_optimizer,
                 precoder_param=precoder_param,
                 interference_F_snapshot=interference_F_snapshot,
-                remaining_bits_by_user=remaining_bits_by_user,
-                block_index_by_user=block_index_by_user,
             )
 
             if len(S) == 0 or B_used <= 0:
@@ -522,7 +509,6 @@ def optimize_payload_with_precoder_training(
             B_kl_star[k].append(int(B_kl))
 
             B_rem -= B_kl
-            remaining_bits_by_user[k] = int(B_rem)
             print(
                 format_log_line(
                     "[UL Convergence Allocation]",
@@ -539,7 +525,6 @@ def optimize_payload_with_precoder_training(
             if B_rem > 0:
                 ell += 1
                 L_out[k] = ell + 1
-                block_index_by_user[k] = int(ell)
 
         # write back to system bookkeeping (optional)
         uplinksystem.L[k] = int(L_out[k])
@@ -579,6 +564,11 @@ def optimize_streaming_blocks_with_precoder_training(
     interference_F_snapshot=None,
     commit_live_precoders: bool = True,
 ):
+    """Solve every independent uplink streaming request in its assigned block.
+
+    Each user has its own optimizer and beam; missed bits are measured but do
+    not carry over because the next block starts a new streaming request.
+    """
     scenario = build_experiment_scenario(uplinksystem.sc, sim_cfg, seed=int(uplinksystem.seed))
     if str(scenario["mode"]) != STREAMING_MODE:
         raise ValueError("optimize_streaming_blocks_with_precoder_training requires streaming mode.")
@@ -603,8 +593,6 @@ def optimize_streaming_blocks_with_precoder_training(
     all_user_block_results = [[] for _ in range(K)]
 
     user_precoder_models: list[nn.Module] = []
-    block_index_by_user = [0 for _ in range(K)]
-
     for k in range(K):
         print(
             format_log_line(
@@ -634,8 +622,6 @@ def optimize_streaming_blocks_with_precoder_training(
         for ell in range(num_blocks):
             while len(uplinksystem.H[k]) <= ell:
                 uplinksystem.add_block(k)
-            block_index_by_user = [int(ell) for _ in range(K)]
-
             target_bits = int(block_targets[k, ell])
             print(
                 format_log_line(
@@ -664,14 +650,11 @@ def optimize_streaming_blocks_with_precoder_training(
                 precoder_param=precoder_param,
                 interference_F_snapshot=interference_F_snapshot,
                 bit_budget_role="streaming",
-                remaining_bits_by_user=block_targets[:, ell].astype(int).tolist(),
-                block_index_by_user=block_index_by_user,
             )
 
             target_bits_star[k].append(int(target_bits))
 
             if len(S) == 0:
-                H_kl = np.asarray(uplinksystem.H[k][ell], dtype=np.complex64)
                 F_zero = np.zeros((int(uplinksystem.NT[k]), int(uplinksystem.dk[k])), dtype=np.complex64)
                 zero_result = {
                     "n_kl": int(uplinksystem.T[k]),
@@ -762,264 +745,6 @@ def optimize_streaming_blocks_with_precoder_training(
     }
     return post_training_data_dict
 
-def evaluate_payload_with_trained_precoder_network(
-    uplinksystem,
-    post_training_data_dict: dict,
-    sim_cfg: dict,
-):
-    """
-    Testing version consistent with training_v2 block allocation, but WITHOUT precoder optimization:
-      - Uses fixed trained precoders F_star (per user per block; fallback to last if needed)
-      - Step A: at n=T, serve the feasible payload supported by the fixed F
-      - Step B: if this is the tail block, reduce n_kl while keeping B_used fixed
-      - Create additional blocks while B_rem > 0
-      - Saves per-block trajectory S_test for plotting (same structure as training)
-
-    Returns:
-      test_data_dict with:
-        - L_out_test, n_star_test, F_star_test, R_star_test
-        - all_user_block_results_test: list[user][block] = S_test (trajectory over n_kl)
-        - B_used_star_test, B_kl_star_test
-        - norm_stats_used (the normalization stats applied)
-    """
-    K = int(uplinksystem.K)
-
-    # from training
-    F_star_train = post_training_data_dict["F_star"]
-    norm_stats_train = post_training_data_dict["norm_stats"]
-    user_model_specs = post_training_data_dict.get("user_model_specs")
-    user_model_states = post_training_data_dict.get("user_model_states")
-    user_models = None
-    if user_model_specs is not None and user_model_states is not None:
-        user_models = load_user_precoder_models(user_model_specs, user_model_states, device=DEVICE)
-
-    # outputs
-    L_out = [1] * K
-    n_star = [[] for _ in range(K)]
-    F_star = [[] for _ in range(K)]
-    R_star = [[] for _ in range(K)]
-    all_user_block_results = [[] for _ in range(K)]
-    B_used_star = [[] for _ in range(K)]
-    B_kl_star = [[] for _ in range(K)]
-
-    for k in range(K):
-        print(f"\n================ TEST USER {k} ================")
-
-        P = float(uplinksystem.P[k])
-        sigma2 = float(uplinksystem.sigma2[k])
-        epsilon = float(uplinksystem.epsilon[k])
-        T = int(uplinksystem.T[k])
-
-        n_kl_min = int(sim_cfg["n_kl_min"])
-        n_kl_step = int(sim_cfg["n_kl_step"])
-
-        B_rem = int(uplinksystem.B[k])
-        ell = 0
-
-        while len(uplinksystem.H[k]) < 1:
-            uplinksystem.add_block(k)
-
-        while B_rem > 0:
-            if ell >= len(uplinksystem.H[k]):
-                uplinksystem.add_block(k)
-
-            H_kl = np.array(uplinksystem.H[k][ell], dtype=np.complex64)
-            if user_models is not None:
-                shared_snapshot = build_precoder_snapshot_from_models(uplinksystem, user_models)
-                F_fix = np.asarray(shared_snapshot[k][ell], dtype=np.complex64)
-                F_fix_t = torch.tensor(F_fix, dtype=torch.complex64)
-                noise_plus_interference_cov = build_uplink_rate_covariance(
-                    uplinksystem,
-                    sim_cfg,
-                    k,
-                    ell,
-                    F_override=shared_snapshot,
-                )
-            else:
-                # ---- fallback for older saved training artifacts ----
-                if k < len(F_star_train) and ell < len(F_star_train[k]):
-                    F_fix_t = F_star_train[k][ell]
-                elif k < len(F_star_train) and len(F_star_train[k]) > 0:
-                    print("Number of sub-blocks has exceeded expected value, no fixed precoder from training found, resorting to precoder from last block")
-                    F_fix_t = F_star_train[k][-1]
-                elif len(F_star_train[k]) == 0:
-                    print(f">>> STOP test user {k}: no trained precoder available.")
-                    break
-
-                F_fix = F_fix_t.detach().cpu().numpy().astype(np.complex64)
-                F_fix = cap_matrix_power_numpy(F_fix, P)
-                noise_plus_interference_cov = build_uplink_rate_covariance(
-                    uplinksystem,
-                    sim_cfg,
-                    k,
-                    ell,
-                    F_override=F_star_train,
-                )
-
-            print(f"\n--- TEST User {k}, Block {ell}, B_rem={B_rem} ---")
-
-            # ==========================================================
-            # STEP A: evaluate the fixed beam at n=T and serve the
-            # feasible payload directly, without retrying.
-            # ==========================================================
-            R_T = evaluate_uplink_rate(
-                H_kl, F_fix, sigma2, epsilon, n_kl=T,
-                noise_plus_interference_covariance=noise_plus_interference_cov
-            ).rate
-            B_max = max(int(np.floor(float(T) * float(R_T))), 0)
-            B_used = int(min(B_rem, B_max))
-
-            print(
-                f"n=T={T}, requested_bits={B_rem}, feasible_bits={B_max}, "
-                f"served_bits={B_used}, R_fbl={R_T}"
-            )
-
-            if B_used <= 0:
-                print(f">>> STOP test user {k} at block {ell}: cannot make n=T feasible.")
-                break
-
-            # Build S trajectory like training: include n=T point + feasible decreasing n_kl points
-            S_block = []
-
-            # n=T point
-            R_T = evaluate_uplink_rate(
-                H_kl, F_fix, sigma2, epsilon, n_kl=T,
-                noise_plus_interference_covariance=noise_plus_interference_cov
-            ).rate
-            S_block.append({
-                "n_kl": int(T),
-                "n": int(T),
-                "B_l": int(B_used),
-                "Bits per sub-block length B/n_kl": float(B_used) / float(T),
-                "F": F_fix_t,  # keep torch tensor for consistency with training plots/SNR plots
-                "R_fbl": float(R_T),
-                "F_power": float(np.linalg.norm(F_fix, "fro") ** 2),
-                "loss_curve": [],
-            })
-
-            # ==========================================================
-            # STEP B: decrease n_kl with B_used fixed (fixed F)
-            # ==========================================================
-            best_n = int(T)
-            best_R = float(R_T)
-            if int(B_used) < int(B_rem):
-                print("Not reducing n_kl since this block only served a partial payload.")
-            else:
-                search_cfg = build_n_search_config(
-                    n_min=int(n_kl_min),
-                    n_max=int(T),
-                    fine_step=int(n_kl_step),
-                    direction=sim_cfg.get("n_search_direction", "descending"),
-                    strategy=sim_cfg.get("n_search_strategy", "fixed_step"),
-                    coarse_step=sim_cfg.get("n_search_coarse_step", int(n_kl_step)),
-                    exponential_factor=sim_cfg.get("n_search_exponential_factor", 2),
-                )
-                reduction_search = run_n_frontier_search(
-                    search_cfg,
-                    lambda candidate_n, stage_name: {
-                        "feasible": (
-                            float(B_used) / float(max(int(candidate_n), 1))
-                        ) <= evaluate_uplink_rate(
-                            H_kl,
-                            F_fix,
-                            sigma2,
-                            epsilon,
-                            n_kl=int(candidate_n),
-                            noise_plus_interference_covariance=noise_plus_interference_cov,
-                        ).rate,
-                        "R_candidate": evaluate_uplink_rate(
-                            H_kl,
-                            F_fix,
-                            sigma2,
-                            epsilon,
-                            n_kl=int(candidate_n),
-                            noise_plus_interference_covariance=noise_plus_interference_cov,
-                        ).rate,
-                        "search_stage": str(stage_name),
-                    },
-                )
-                for accepted in reduction_search["accepted"]:
-                    best_n = int(accepted["n_kl"])
-                    best_R = float(accepted["result"]["R_candidate"])
-                    print(
-                        f"Test n_kl={best_n}: R_fbl={best_R}, "
-                        f"search_stage={accepted['result']['search_stage']}, rate_violation=0.0"
-                    )
-                    S_block.append({
-                        "n_kl": int(best_n),
-                        "n": int(best_n),
-                        "B_l": int(B_used),
-                        "Bits per sub-block length B/n_kl": float(B_used) / float(best_n),
-                        "F": F_fix_t,
-                        "R_fbl": float(best_R),
-                        "F_power": float(np.linalg.norm(F_fix, "fro") ** 2),
-                        "loss_curve": [],
-                    })
-                rejected = reduction_search.get("frontier_rejected")
-                if rejected is not None:
-                    rejected_n = int(rejected["n_kl"])
-                    rejected_R = float(rejected["result"]["R_candidate"])
-                    rejected_gap = (float(B_used) / float(max(rejected_n, 1))) - rejected_R
-                    print(
-                        f"Test n_kl={rejected_n}: R_fbl={rejected_R}, "
-                        f"search_stage={rejected['result']['search_stage']}, rate_violation={rejected_gap}"
-                    )
-
-            print(f">>> Chosen block {ell}: n_kl={best_n}, B_used={B_used}, R_fbl={best_R}")
-
-            # save trajectory for plotting
-            all_user_block_results[k].append(S_block)
-
-            # save chosen decisions
-            n_star[k].append(best_n)
-            F_star[k].append(F_fix_t)
-            R_star[k].append(best_R)
-            B_used_star[k].append(int(B_used))
-
-            B_kl = min(B_rem, int(B_used))
-            B_kl_star[k].append(int(B_kl))
-            B_rem -= B_kl
-            print(f">>> Transmitted B_kl={B_kl}, remaining B_rem={B_rem}")
-
-            if B_rem > 0:
-                ell += 1
-                L_out[k] = ell + 1
-            else:
-                ell += 1
-                L_out[k] = ell
-                
-        
-        uplinksystem.L[k] = int(L_out[k])
-        if len(n_star[k]) > 0:
-            uplinksystem.n_kl[k] = list(n_star[k])
-
-    # push F into uplinksystem (numpy)
-    for k in range(K):
-        if len(F_star[k]) > 0:
-            uplinksystem.F[k] = np.array([F.detach().cpu().numpy() for F in F_star[k]])
-
-    try:
-        uplinksystem.update_system()
-    except Exception:
-        pass
-
-    test_data_dict = {
-        "L_out_test": L_out,
-        "n_star_test": n_star,
-        "F_star_test": F_star,
-        "R_star_test": R_star,
-        "all_user_block_results_test": all_user_block_results,
-        "B_used_star_test": B_used_star,
-        "B_kl_star_test": B_kl_star,
-        "norm_stats_used": norm_stats_train,
-        "user_model_specs": user_model_specs,
-        "user_model_states": user_model_states,
-        "precoder_parameterization": post_training_data_dict.get(
-            "precoder_parameterization",
-            "per_block_precoders" if user_models is None else "shared_user_channel_n_sigma_epsilon_to_precoder_mlp",
-        ),
-    }
-    return test_data_dict
 
 def run_convergence_baseline(
     uplinksystem,
@@ -1027,7 +752,19 @@ def run_convergence_baseline(
     interference_F_snapshot=None,
     commit_live_precoders: bool = True,
 ):
-    """Run the configured online convergence allocation for one uplink system."""
+    """Dispatch the uplink training-only solver using the configured traffic semantics.
+
+    What: map the public convergence settings to the payload-completion or streaming
+    allocator, run online beam optimization for every tested user/blocklength, and
+    annotate the result with the direct-precoder or precoder-network parameterization.
+
+    Why: callers need one stable entry point while payload and streaming intentionally
+    use different bit-carry rules. ``interference_F_snapshot`` optionally freezes the
+    other users' beams for interference evaluation, and ``commit_live_precoders``
+    controls whether accepted beams mutate the supplied system.
+
+    Returns: the common post-optimization schedule and convergence result schema.
+    """
     local_sim_cfg = dict(sim_cfg)
     effective_epochs = max(1, int(local_sim_cfg["max_epochs"]))
     local_sim_cfg["max_epochs"] = effective_epochs
@@ -1059,7 +796,6 @@ def run_convergence_baseline(
 
 
 __all__ = [
-    "evaluate_payload_with_trained_precoder_network",
     "optimize_payload_with_precoder_training",
     "optimize_streaming_blocks_with_precoder_training",
     "optimize_user_blocklength_and_precoder",

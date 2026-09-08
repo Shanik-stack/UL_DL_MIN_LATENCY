@@ -49,7 +49,23 @@ def optimize_precoder_for_nl(
     precoder_param: torch.nn.Parameter | None = None,
     update_mode: str = "precoder_net",
 ) -> dict[str, object]:
-    """Maximize FBL rate for one user, channel block, and blocklength."""
+    """Solve one user's beamforming problem for a fixed channel and ``n_kl``.
+
+    What: optimize either the complex precoder entries directly or the weights of
+    that user's precoder network. Each epoch builds the current beam, evaluates the
+    uplink FBL objective and its rate/power constraints, performs one gradient
+    update, projects the beam to ``||F_kl||_F^2 <= P_k``, and then measures the
+    updated state.
+
+    Why: allocation decides which blocklengths to test, while this function answers
+    the continuous subproblem: whether a beam can support the requested bits at one
+    chosen ``n_kl``. Keeping that numerical solve here gives payload and streaming
+    allocation identical convergence and checkpoint behavior.
+
+    Returns: the selected feasible (or best available) precoder, its FBL rate and
+    power, the loss history, KKT residual history, and the reason optimization
+    stopped. The caller uses those values to accept or reject the tested ``n_kl``.
+    """
     update_mode = validate_convergence_precoder_update_mode(update_mode)
     if update_mode == "precoder_net" and precoder_net is None:
         raise ValueError("precoder_net is required when update_mode='precoder_net'.")
@@ -60,7 +76,6 @@ def optimize_precoder_for_nl(
     print_every_epoch = max(1, int(print_every_epoch))
     loss_curve: list[float] = []
     convergence_history: list[dict[str, float]] = []
-    previous_precoder: torch.Tensor | None = None
     best_loss = float("inf")
     solve_status = "max_epochs_reached"
 
@@ -105,9 +120,17 @@ def optimize_precoder_for_nl(
 
     best_state = capture_state()
     for epoch_index in range(max_epochs):
-        precoder = build_precoder()
         optimizer.zero_grad()
-        objective = loss_fn(precoder)
+        training_precoder = build_precoder()
+        precoder_before_update = training_precoder.detach().clone()
+        training_objective = loss_fn(training_precoder)
+        training_objective["loss"].backward()
+        optimizer.step()
+
+        # Re-evaluate the updated state for stopping and checkpoint selection.
+        with torch.no_grad():
+            precoder = build_precoder()
+            objective = loss_fn(precoder)
         loss = objective["loss"]
         rate = objective["rate"]
         power = objective["power"]
@@ -115,23 +138,18 @@ def optimize_precoder_for_nl(
         power_gap = objective["power_gap"]
         rate_violation = objective["rate_violation"]
         power_violation = objective["power_violation"]
-        loss.backward()
-
         primal_residual = max(
             float(rate_violation.detach().cpu()),
             float(power_violation.detach().cpu()),
         )
-        if previous_precoder is None:
-            precoder_change = float("inf")
-        else:
-            numerator = float(
-                torch.linalg.norm(precoder.detach() - previous_precoder, ord="fro").cpu()
-            )
-            denominator = max(
-                float(torch.linalg.norm(previous_precoder, ord="fro").cpu()),
-                1e-12,
-            )
-            precoder_change = numerator / denominator
+        numerator = float(
+            torch.linalg.norm(precoder.detach() - precoder_before_update, ord="fro").cpu()
+        )
+        denominator = max(
+            float(torch.linalg.norm(precoder_before_update, ord="fro").cpu()),
+            1e-12,
+        )
+        precoder_change = numerator / denominator
 
         objective_value = float(loss.detach().cpu())
         loss_curve.append(objective_value)
@@ -150,12 +168,10 @@ def optimize_precoder_for_nl(
                 "power": float(power.detach().cpu()),
             }
         )
-        previous_precoder = precoder.detach().clone()
-
         epoch_status = convergence_status_from_config(
             stopping_config,
             precoder_change=precoder_change,
-            has_previous_state=epoch_index > 0,
+            has_previous_state=True,
             residuals=KktResiduals(primal_residual, 0.0, precoder_change),
         )
         if verbose and (
@@ -184,8 +200,6 @@ def optimize_precoder_for_nl(
         if epoch_status != "running":
             solve_status = epoch_status
             break
-        if epoch_index + 1 < max_epochs:
-            optimizer.step()
 
     restore_state(best_state)
     if solve_status == "max_epochs_reached":

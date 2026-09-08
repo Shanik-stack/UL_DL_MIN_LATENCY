@@ -8,6 +8,7 @@ import numpy as np
 
 from latency_optimization.experiments.cost import build_uplink_convergence_cost
 from latency_optimization.experiments.configuration import load_config_document
+from latency_optimization.core.scenarios import STREAMING_MODE
 from latency_optimization.results.console import format_latency_log_line
 from latency_optimization.results.naming import (
     format_method_tag,
@@ -24,7 +25,8 @@ from latency_optimization.results.persistence import (
     write_result_manifest,
 )
 
-from ..config import load_config, validate_uplink_objective_mode
+from ..config import load_config
+from ..objective_settings import validate_uplink_objective_mode
 from .solver import validate_convergence_precoder_update_mode
 from ..reporting import (
     build_convergence_result,
@@ -34,7 +36,8 @@ from ..reporting import (
 from ..result_writer import save_test_results_to_txt
 from ..simulation import (
     apply_training_solution,
-    estimate_initial_random_precoder_schedule_for_scenario,
+    estimate_initial_random_precoder_payload_schedule,
+    estimate_initial_random_precoder_streaming_schedule,
 )
 from ..system import UplinkSystem
 from ..plotting import (
@@ -64,17 +67,26 @@ def run_convergence_experiment(
     do_plots: bool = True,
     plot_output_dirs: dict[str, str] | None = None,
 ) -> dict:
+    """Run one complete uplink convergence experiment from baseline through reporting.
+
+    This orchestration boundary loads config, preserves the common initial state, optimizes, and writes plots.
+    """
     run_started_at_local = current_local_timestamp()
     system_params, sim_cfg, _ = load_config(cfg_name)
     sim_cfg = dict(sim_cfg)
     core_start = perf_counter()
 
-    initial_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    baseline_builder = (
+        estimate_initial_random_precoder_streaming_schedule
+        if str(sim_cfg["experiment_scenario_mode"]) == STREAMING_MODE
+        else estimate_initial_random_precoder_payload_schedule
+    )
+    initial_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(seed),
     )
-    naive_full_t_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    naive_full_t_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(seed),

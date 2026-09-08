@@ -1,0 +1,200 @@
+Training experiment scenarios by seed
+Experiment scenario summary
+Mode: payload
+Seed: 1
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 2
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 3
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 4
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 5
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 6
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 7
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 8
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 9
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 10
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 11
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 12
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 13
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 14
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 15
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 16
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 17
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 18
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 19
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]
+
+Experiment scenario summary
+Mode: payload
+Seed: 20
+Termination rule: until_payload_drained
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [80, 120, 160]

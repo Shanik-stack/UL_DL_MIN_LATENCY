@@ -1,0 +1,48 @@
+
+|| ---------------- USER 0 ---------------- ||
+R_fbl: Initial [2.55575991 4.0642457  0.75033855] -> Final [4.399343967437744, 3.6094155311584473]
+n_kl: Initial [12, 12, 5] -> Final [12, 9]
+N_k: Initial 29 -> Final 21
+B_tx_kl: Initial [30, 48, 2] -> Final [52, 28]
+Bits per symbol: Initial avg 2.7586206896551726, per block [2.5, 4.0, 0.4] -> Final [4.33333333 3.11111111]
+SNR_dB: Initial 1.7516 -> Final 2.2692
+SINR_dB: Initial -4.8781 -> Final -4.0427
+
+|| ---------------- USER 1 ---------------- ||
+R_fbl: Initial [4.42360115 5.05370378] -> Final [6.225833415985107, 4.842258930206299]
+n_kl: Initial [14, 12] -> Final [14, 8]
+N_k: Initial 26 -> Final 22
+B_tx_kl: Initial [61, 59] -> Final [87, 33]
+Bits per symbol: Initial avg 4.615384615384615, per block [4.357142857142857, 4.916666666666667] -> Final [6.21428571 4.125     ]
+SNR_dB: Initial 4.4015 -> Final 3.7654
+SINR_dB: Initial -4.0527 -> Final -4.7846
+
+|| ---------------- USER 2 ---------------- ||
+R_fbl: Initial [6.81633091 6.02031326] -> Final [9.741393089294434, 1.8662328720092773]
+n_kl: Initial [16, 9] -> Final [16, 3]
+N_k: Initial 25 -> Final 19
+B_tx_kl: Initial [109, 51] -> Final [155, 5]
+Bits per symbol: Initial avg 6.4, per block [6.8125, 5.666666666666667] -> Final [9.6875     1.66666667]
+SNR_dB: Initial 6.0771 -> Final 6.4783
+SINR_dB: Initial -3.1777 -> Final -2.6602
+
+Initial latency per user:
+[0.00193333 0.00173333 0.00166667]
+
+Final latency per user:
+[0.0014     0.00146667 0.00126667]
+Latency reduction per user (%): [27.5862069  15.38461538 24.        ]
+Total latency reduction (%): 22.499999999999996
+
+Initial asynchronality:
+User 0 - User 1: 0.0002000000000000001
+User 0 - User 2: 0.00026666666666666657
+User 1 - User 2: 6.666666666666648e-05
+Initial sum of asynchronality: 0.0005333333333333331
+
+Final asynchronality:
+User 0 - User 1: 6.66666666666667e-05
+User 0 - User 2: 0.0001333333333333334
+User 1 - User 2: 0.0002000000000000001
+Final sum of asynchronality: 0.0004000000000000002
+Asynchronality reduction (%): 24.99999999999994

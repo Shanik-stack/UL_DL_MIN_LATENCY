@@ -1,6 +1,5 @@
 """Uplink Monte Carlo channel episodes and rollout-query generation."""
 
-import copy
 from typing import Any, Sequence
 
 import numpy as np
@@ -19,10 +18,10 @@ from latency_optimization.experiments.channels import (
 from latency_optimization.results.console import format_log_line
 from latency_optimization.runtime import DEVICE
 
-from ..config import (
+from ..config import load_config
+from ..objective_settings import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
-    load_config,
 )
 from ..precoders.inference import infer_precoder
 from ..simulation import ensure_blocks_up_to
@@ -40,6 +39,12 @@ def build_training_dataset(
     cfg_name: str,
     train_seeds: Sequence[int],
 ) -> list[dict[str, Any]]:
+    """Create the immutable uplink base dataset from seeds and per-user SNR ranges.
+
+    A payload seed identifies one channel episode; a streaming seed identifies one
+    independent block. Candidate n values are not prebuilt here; rollout generation
+    discovers them later using the current user networks.
+    """
     system_params, sim_cfg, _ = load_config(cfg_name)
     snr_db_by_user_by_seed = build_training_snr_schedule(
         train_seeds,
@@ -81,6 +86,11 @@ def build_training_dataset(
 
 
 def summarize_training_dataset(training_episodes: Sequence[dict[str, Any]]) -> dict:
+    """Describe base-sample count, sample unit, seeds, users, and SNR coverage.
+
+    This deliberately excludes rollout-query counts so a channel episode is not confused
+    with the multiple ``(channel, block, n_kl)`` states generated from that episode.
+    """
     if len(training_episodes) == 0:
         return {
             "total_training_samples": 0,
@@ -172,21 +182,33 @@ def _evaluate_uplink_rollout_query(
     model: torch.nn.Module,
     episode: dict[str, Any],
     n_kl: int,
+    *,
+    precoder: torch.Tensor | None = None,
 ) -> dict[str, Any]:
+    """Measure the current model's beam at one visited uplink n_kl.
+
+    What: infer or reuse ``F_kl``, compute its power and canonical FBL rate, and return
+    the power margin. Why: rollout search needs physical measurements to label feasibility,
+    but gradients are computed later by the trainer from the stored query inputs.
+    """
     H = torch.as_tensor(episode["H"], dtype=torch.complex64, device=DEVICE)
     noise_cov = episode.get("noise_plus_interference_cov")
     if noise_cov is not None:
         noise_cov = torch.as_tensor(noise_cov, dtype=torch.complex64, device=DEVICE)
     with torch.no_grad():
-        F_pred = infer_precoder(
-            model,
-            H,
-            int(n_kl),
-            float(episode["sigma2"]),
-            float(episode["epsilon"]),
-            transmit_antennas=int(H.shape[1]),
-            streams=int(episode.get("dk", H.shape[1] if H.ndim > 1 else 1)),
-            power_limit=float(episode["P"]),
+        F_pred = (
+            precoder
+            if precoder is not None
+            else infer_precoder(
+                model,
+                H,
+                int(n_kl),
+                float(episode["sigma2"]),
+                float(episode["epsilon"]),
+                transmit_antennas=int(H.shape[1]),
+                streams=int(episode.get("dk", H.shape[1] if H.ndim > 1 else 1)),
+                power_limit=float(episode["P"]),
+            )
         )
         power = float(torch.linalg.norm(F_pred, ord="fro").square().real.cpu())
         rate = float(
@@ -240,6 +262,12 @@ def _ensure_precoder_net_snapshot_block(
     *,
     evaluation_cost_counters: dict[str, Any] | None = None,
 ) -> list[list[torch.Tensor]]:
+    """Extend a cached joint uplink beam snapshot through a newly reached block.
+
+    What: deterministically create missing channel state and infer each user's ``n=T``
+    beam exactly once for that block. Why: later candidate checks reuse earlier blocks
+    instead of repeatedly rebuilding the entire schedule during test or rollout search.
+    """
     ensure_blocks_up_to(uplinksystem, int(block_idx))
     for k in range(int(uplinksystem.K)):
         while len(snapshot_cache[int(k)]) <= int(block_idx):
@@ -280,6 +308,12 @@ def _build_uplink_rollout_query(
     rollout_stage: str,
     frontier_query: bool,
 ) -> dict[str, Any]:
+    """Create one self-contained uplink training query from a visited rollout state.
+
+    It stores channel, n, power/reliability inputs, optional interference covariance,
+    required bits/rate, achieved metrics, and frontier metadata. The trainer can therefore
+    reevaluate the Lagrangian/rate loss without replaying the scheduling search.
+    """
     required_rate = (
         float(required_bits) / float(max(int(n_kl), 1))
         if int(required_bits) > 0
@@ -320,6 +354,11 @@ def _collect_uplink_payload_rollout_queries_for_episode(
     training_episode: dict[str, Any],
     user_models: Sequence[torch.nn.Module],
 ) -> list[list[dict[str, Any]]]:
+    """Collect per-user training states while a payload episode completes.
+
+    The current networks determine served bits and visited n values; additional
+    seeded channel blocks are generated only while payload remains.
+    """
     seed = int(training_episode["seed"])
     scenario = dict(training_episode["scenario"])
     K = int(system_params["K"])
@@ -333,11 +372,7 @@ def _collect_uplink_payload_rollout_queries_for_episode(
     queries_by_user: list[list[dict[str, Any]]] = [[] for _ in range(K)]
     block = 0
 
-    while np.any(remaining > 0):
-        if block >= max_blocks:
-            raise RuntimeError(
-                f"Uplink Monte Carlo training rollout hit max_total_blocks={max_blocks} for seed={seed} with remaining bits {remaining.tolist()}."
-            )
+    while np.any(remaining > 0) and block < max_blocks:
         ensure_blocks_up_to(system, int(block))
         active_mask = [1 if int(remaining[int(k)]) > 0 else 0 for k in range(K)]
         snapshot_full = _build_precoder_net_snapshot_for_active_mask(system, user_models, int(block), active_mask)
@@ -374,7 +409,9 @@ def _collect_uplink_payload_rollout_queries_for_episode(
                 "dk": dk,
                 "noise_plus_interference_cov": cov_T,
             }
-            full_metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, T_ref)
+            full_metrics = _evaluate_uplink_rollout_query(
+                user_models[int(k)], base_episode, T_ref, precoder=F_T
+            )
             queries_by_user[int(k)].append(
                 _build_uplink_rollout_query(
                     seed=seed,
@@ -477,6 +514,17 @@ def _collect_uplink_payload_rollout_queries_for_episode(
             remaining[int(k)] = max(int(remaining[int(k)]) - int(committed_bits), 0)
         block += 1
 
+    episode_completed = not bool(np.any(remaining > 0))
+    for user_queries in queries_by_user:
+        if not user_queries:
+            continue
+        user_queries[-1]["episode_completed"] = bool(episode_completed)
+        user_queries[-1]["episode_stop_reason"] = (
+            "payload_completed" if episode_completed else "max_total_blocks_reached"
+        )
+        user_queries[-1]["episode_blocks_visited"] = int(block)
+        user_queries[-1]["episode_remaining_bits_at_stop"] = [int(value) for value in remaining]
+
     return queries_by_user
 
 
@@ -486,6 +534,11 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
     training_episode: dict[str, Any],
     user_models: Sequence[torch.nn.Module],
 ) -> list[list[dict[str, Any]]]:
+    """Collect per-user states for independent streaming-block requests.
+
+    Unlike payload rollouts, each sampled channel represents one block and any
+    unserved bits are discarded before the next training sample.
+    """
     seed = int(training_episode["seed"])
     scenario = dict(training_episode["scenario"])
     block_targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
@@ -534,7 +587,9 @@ def _collect_uplink_streaming_rollout_queries_for_channel_episode(
                 "dk": dk,
                 "noise_plus_interference_cov": cov_T,
             }
-            full_metrics = _evaluate_uplink_rollout_query(user_models[int(k)], base_episode, T_ref)
+            full_metrics = _evaluate_uplink_rollout_query(
+                user_models[int(k)], base_episode, T_ref, precoder=F_T
+            )
             queries_by_user[int(k)].append(
                 _build_uplink_rollout_query(
                     seed=seed,
@@ -671,6 +726,12 @@ def _generate_rollout_queries_for_training_episodes(
     training_episodes: Sequence[dict[str, Any]],
     user_models: Sequence[torch.nn.Module],
 ) -> list[list[dict[str, Any]]]:
+    """Regenerate per-user training queries from all current-model rollouts.
+
+    What: select payload or streaming rollout semantics per base sample and merge the
+    visited states by user. Why: each epoch trains on states induced by the current
+    networks, including later payload blocks and reduced-n frontier states.
+    """
     K = int(system_params["K"])
     queries_by_user: list[list[dict[str, Any]]] = [[] for _ in range(K)]
     for training_episode in training_episodes:
@@ -696,6 +757,7 @@ def _summarize_rollout_queries_by_user(queries_by_user: Sequence[Sequence[dict[s
     global_frontier_queries_by_n_kl: dict[int, int] = {}
     global_queries_by_feasibility = {"feasible": 0, "infeasible": 0, "frontier": 0}
     per_user = []
+    payload_episode_outcomes: dict[int, dict[str, Any]] = {}
 
     for user_idx, queries in enumerate(queries_by_user):
         user_queries_by_n_kl: dict[int, int] = {}
@@ -704,6 +766,15 @@ def _summarize_rollout_queries_by_user(queries_by_user: Sequence[Sequence[dict[s
         infeasible_count = 0
         frontier_count = 0
         for query in queries:
+            if "episode_completed" in query:
+                payload_episode_outcomes[int(query["seed"])] = {
+                    "completed": bool(query["episode_completed"]),
+                    "stop_reason": str(query["episode_stop_reason"]),
+                    "blocks_visited": int(query["episode_blocks_visited"]),
+                    "remaining_bits_at_stop": [
+                        int(value) for value in query["episode_remaining_bits_at_stop"]
+                    ],
+                }
             n_val = int(query["n_kl"])
             user_queries_by_n_kl[n_val] = user_queries_by_n_kl.get(n_val, 0) + 1
             global_queries_by_n_kl[n_val] = global_queries_by_n_kl.get(n_val, 0) + 1
@@ -738,6 +809,15 @@ def _summarize_rollout_queries_by_user(queries_by_user: Sequence[Sequence[dict[s
         "global_rollout_queries_by_feasibility": {
             key: int(value) for key, value in global_queries_by_feasibility.items()
         },
+        "payload_episode_outcomes": {
+            str(seed): outcome for seed, outcome in sorted(payload_episode_outcomes.items())
+        },
+        "completed_payload_episodes": int(
+            sum(bool(outcome["completed"]) for outcome in payload_episode_outcomes.values())
+        ),
+        "truncated_payload_episodes": int(
+            sum(not bool(outcome["completed"]) for outcome in payload_episode_outcomes.values())
+        ),
         "per_user": per_user,
     }
 

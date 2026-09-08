@@ -11,10 +11,12 @@ MONTE_CARLO_SEARCH_PHASES = {"training", "testing"}
 
 
 def validate_n_search_direction(value: Any) -> str:
+    """Validate whether candidate n values are visited upward or downward."""
     return require_choice(value, N_SEARCH_DIRECTIONS, "n_search_direction")
 
 
 def validate_n_search_strategy(value: Any, *, allow_only_fixed_step: bool = False) -> str:
+    """Validate a search strategy and enforce fixed-step-only training when requested."""
     strategy = require_choice(value, N_SEARCH_STRATEGIES, "n_search_strategy")
     if allow_only_fixed_step and strategy != "fixed_step":
         raise ValueError(
@@ -35,6 +37,7 @@ def build_n_search_config(
     exponential_factor: int | None = None,
     allow_only_fixed_step: bool = False,
 ) -> dict[str, int | str]:
+    """Normalize one link-independent blocklength-search specification."""
     n_min_int = int(n_min)
     n_max_int = int(n_max)
     fine_step_int = max(1, int(fine_step))
@@ -58,7 +61,7 @@ def build_monte_carlo_n_search_config(
     n_max: int,
     phase: str,
 ) -> dict[str, int | str]:
-    """Resolve the shared Monte Carlo blocklength-search policy."""
+    """Resolve the shared Monte Carlo blocklength-search settings."""
     resolved_phase = require_choice(phase, MONTE_CARLO_SEARCH_PHASES, "monte_carlo_search_phase")
     fine_step = int(simulation["n_kl_step"])
     if resolved_phase == "training":
@@ -123,6 +126,7 @@ def build_fixed_step_n_candidates(
     step: int,
     direction: Any,
 ) -> list[int]:
+    """Generate deterministic ascending or descending fixed-step n candidates."""
     resolved_direction = validate_n_search_direction(direction)
     if resolved_direction == "descending":
         return _descending_candidates(int(n_min), int(n_max), max(1, int(step)))
@@ -203,6 +207,11 @@ def run_n_frontier_search(
     search_cfg: dict[str, int | str],
     evaluate_candidate: Callable[[int, str], dict[str, Any]],
 ) -> dict[str, Any]:
+    """Search candidate blocklengths and retain the feasible frontier.
+
+    The callback owns link-specific beam/rate evaluation; this function owns
+    candidate ordering, coarse-to-fine refinement, and visited-state tracking.
+    """
     n_min = int(search_cfg["n_min"])
     n_max = int(search_cfg["n_max"])
     fine_step = int(search_cfg["fine_step"])

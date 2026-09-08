@@ -76,9 +76,9 @@ from ..system import DownlinkSystem
 from .evaluator import evaluate_downlink_precoder_net
 from .rollout import build_training_dataset
 from .trainer import (
-    build_precoder_net_artifact,
     train_blocklength_aware_precoder_net,
 )
+from .network_operations import build_precoder_net_artifact
 
 
 def _build_dataset_summary_lines(dataset_summary: dict[str, object]) -> list[str]:
@@ -445,6 +445,19 @@ def evaluate_trained_precoder_network_on_test_channel(
     training_completed_at_local: str,
     precoder_net_batch_size: int,
 ) -> dict[str, object]:
+    """Measure trained downlink networks on one deterministic held-out channel.
+
+    What: rebuild the test system at the requested seed/SNR, restore the trained model
+    states, run inference-only payload or streaming allocation, and compare the final
+    schedule with the same random and full-T references used by other methods. It
+    also computes metrics, plots, timestamps, and the training/testing cost split.
+
+    Why: separating this function from training prevents test-channel gradients or
+    optimizer state from leaking into evaluation. Search overrides may change only
+    the test-time n strategy; they do not retrain the beamformer.
+
+    Returns: the complete test result written into the hashed experiment directory.
+    """
     configure_determinism(int(test_seed))
     system_params, sim_params, run_meta = load_config(cfg_name)
     system_params = with_monte_carlo_sample_snr_by_user(system_params, test_snr_db_by_user)

@@ -21,16 +21,19 @@ UPLINK_RATE_MODEL_SNR = "snr"
 
 
 def validate_uplink_rate_model(value: str) -> str:
+    """Reject unsupported uplink rate modes before an experiment starts."""
     return require_choice(value, {UPLINK_RATE_MODEL_SINR, UPLINK_RATE_MODEL_SNR}, "uplink_rate_model")
 
 
 def get_uplink_rate_model(sim_cfg: Mapping[str, Any] | None) -> str:
+    """Resolve whether an uplink experiment evaluates SNR or interference-aware SINR."""
     if sim_cfg is None:
         return UPLINK_RATE_MODEL_SINR
     return validate_uplink_rate_model(sim_cfg.get("uplink_rate_model", UPLINK_RATE_MODEL_SINR))
 
 
 def uses_uplink_interference(sim_cfg: Mapping[str, Any] | None) -> bool:
+    """Report whether other users must enter the uplink receive covariance."""
     return get_uplink_rate_model(sim_cfg) == UPLINK_RATE_MODEL_SINR
 
 
@@ -42,6 +45,10 @@ def build_uplink_rate_covariance(
     *,
     F_override=None,
 ) -> np.ndarray | None:
+    """Build the NumPy interference-plus-noise covariance for one uplink rate query.
+
+    Returning None in SNR mode lets all callers share one evaluation interface.
+    """
     if not uses_uplink_interference(sim_cfg):
         return None
     return np.asarray(
@@ -63,7 +70,10 @@ def build_uplink_rate_covariance_torch(
     precoders: list[list[torch.Tensor]] | None = None,
     device: torch.device | None = None,
 ) -> torch.Tensor | None:
-    """Build the uplink covariance without leaving the Torch compute layer."""
+    """Build differentiable uplink interference-plus-noise covariance in Torch.
+
+    Training and convergence use it without crossing into NumPy or breaking gradients.
+    """
     if not uses_uplink_interference(sim_cfg):
         return None
     k = int(user)
@@ -108,6 +118,10 @@ def evaluate_uplink_rate(
     covariance_jitter: float = 0.0,
     rate_law: RateLaw = NORMAL_APPROXIMATION_RATE_LAW,
 ) -> ScalarRateResult:
+    """Evaluate and detach one uplink FBL rate for scheduling or reporting.
+
+    Optimization-independent code uses this wrapper around the canonical Torch rate law.
+    """
     channel_tensor = as_complex_tensor(channel, device=DEVICE)
     precoder_tensor = as_complex_tensor(precoder, device=DEVICE)
     covariance = (
@@ -138,6 +152,7 @@ def evaluate_uplink_rate_tensor(
     covariance_jitter: float = 0.0,
     rate_law: RateLaw = NORMAL_APPROXIMATION_RATE_LAW,
 ) -> TorchRateResult:
+    """Evaluate a differentiable uplink FBL rate for solver and neural-network losses."""
     covariance = (
         float(sigma2)
         * torch.eye(channel.shape[0], dtype=channel.dtype, device=channel.device)

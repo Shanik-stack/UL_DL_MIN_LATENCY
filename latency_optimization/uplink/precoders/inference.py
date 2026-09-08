@@ -14,6 +14,7 @@ def network_output_to_precoder(
     transmit_antennas: int,
     streams: int,
 ) -> torch.Tensor:
+    """Decode stacked real/imaginary network output into a complex beam matrix."""
     real_imaginary = network_output.squeeze(0).reshape(
         2, int(transmit_antennas), int(streams)
     )
@@ -30,6 +31,7 @@ def infer_precoder(
     streams: int,
     power_limit: float,
 ) -> torch.Tensor:
+    """Run the n-aware uplink MLP and enforce the user's transmit-power limit."""
     channel_tensor = as_complex_tensor(channel, device=next(model.parameters()).device)
     output = model(channel_tensor, blocklength, noise_variance, error_probability)
     precoder = network_output_to_precoder(output, transmit_antennas, streams)

@@ -14,6 +14,7 @@ latency_optimization/
   results/         shared metrics, plots, names, paths, and persistence
   uplink/
     objective.py   `UplinkPrecoderObjective` for one user and block
+    objective_settings.py  uplink objective selection and validation
     precoders/     MLP models, Torch inference, and checkpoints
     convergence/   online precoder optimization and allocation
     monte_carlo/   rollout, trainer, evaluator
@@ -21,6 +22,7 @@ latency_optimization/
   downlink/
     objective.py   `DownlinkPrecoderObjective` for one coupled BS block
     objective_settings.py  downlink objective selection and display names
+    reporting.py   downlink result assembly shared by experiment methods
     precoders/     MLP models, inference, and checkpoints
     convergence/   joint BS optimization and allocation
     monte_carlo/   rollout, trainer, evaluator
@@ -64,9 +66,9 @@ objectives, rate evaluation, candidate search, and gradient optimization.
 Channels loaded from generated datasets are converted when they enter this
 compute layer. Precoder tensors are converted to NumPy only when a completed
 schedule is committed to the current simulator or passed to persistence and
-plotting code. These boundary conversions live in `model_service.py` and
-`precoders/serialization.py`; model and physics modules must not return NumPy
-arrays.
+plotting code. Shared conversion helpers live in `precoders/serialization.py`;
+downlink joint-precoder assembly lives in `downlink/model_service.py`. Model
+and physics modules must not return NumPy arrays.
 
 `results/metrics.py` owns link-independent latency, asynchronality, and
 reference-schedule schemas. `results/plotting.py` owns plot primitives shared

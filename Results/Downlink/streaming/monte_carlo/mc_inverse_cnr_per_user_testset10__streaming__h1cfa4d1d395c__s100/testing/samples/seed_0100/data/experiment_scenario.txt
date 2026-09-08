@@ -1,0 +1,11 @@
+Experiment scenario summary
+Mode: streaming
+Seed: 100
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False

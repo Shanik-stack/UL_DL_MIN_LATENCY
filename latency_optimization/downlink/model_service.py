@@ -33,6 +33,7 @@ def describe_precoder_parameterization(
     *,
     uses_blocklength_input: bool = False,
 ) -> str:
+    """Describe the configured optimization variable in result-facing language."""
     if update_mode == "direct_precoder":
         return "direct_active_block_precoders"
     if validate_downlink_precoder_net_scope(model_scope) == "bs_shared_net":
@@ -45,6 +46,7 @@ def describe_precoder_parameterization(
 
 
 def initial_baseline_model_scope() -> str:
+    """Return the model scope used to reproduce the common random initial baseline."""
     return "per_user_nets"
 
 
@@ -54,6 +56,10 @@ def build_precoder_models(
     initialization_seed: int | None = None,
     model_scope: str,
 ) -> list[torch.nn.Module]:
+    """Construct independent user networks or one shared full-BS network.
+
+    Seed isolation makes initialization reproducible without disturbing global RNG state.
+    """
     resolved_scope = validate_downlink_precoder_net_scope(model_scope)
 
     def construct() -> list[torch.nn.Module]:
@@ -103,6 +109,10 @@ def build_model_optimizers(
     *,
     learning_rate: float,
 ) -> list[torch.optim.Optimizer]:
+    """Create one Adam optimizer per distinct model object.
+
+    Shared model references therefore share optimizer state while user models remain independent.
+    """
     by_model_identity: dict[int, torch.optim.Optimizer] = {}
     optimizers: list[torch.optim.Optimizer] = []
     for model in models:
@@ -117,10 +127,12 @@ def build_model_optimizers(
 
 
 def models_output_full_bs_precoder(models: Sequence[torch.nn.Module]) -> bool:
+    """Identify whether a model collection emits one joint BS precoder."""
     return bool(models) and model_outputs_full_bs_precoder(models[0])
 
 
 def active_mask_for_users(system: DownlinkSystem, active_users: Sequence[int]) -> list[int]:
+    """Encode active users as the fixed-width mask consumed by shared networks."""
     active = {int(user) for user in active_users}
     return [int(user in active) for user in range(system.K)]
 
@@ -131,6 +143,7 @@ def infer_shared_block_precoders_for_simulator(
     block: int,
     active_users: Sequence[int],
 ) -> dict[int, np.ndarray]:
+    """Run a shared channel-only model and return simulator-ready user beam slices."""
     with torch.no_grad():
         beams = infer_raw_bs_precoders_torch(
             shared_model,
@@ -149,6 +162,7 @@ def infer_shared_blocklength_precoders_for_simulator(
     blocklengths: Sequence[int],
     active_mask: Sequence[int | float],
 ) -> list[np.ndarray]:
+    """Run a shared n-aware model and split its full BS output into user beams."""
     with torch.no_grad():
         beams = infer_raw_bs_precoders_torch_with_blocklength(
             shared_model,
@@ -171,6 +185,7 @@ def infer_user_precoder_for_simulator(
     *,
     user_index: int,
 ) -> np.ndarray:
+    """Run one channel-only user model without gradients and return a NumPy beam."""
     with torch.no_grad():
         beam = infer_raw_precoder_torch(
             model,
@@ -194,6 +209,7 @@ def infer_user_blocklength_precoder_for_simulator(
     *,
     user_index: int,
 ) -> np.ndarray:
+    """Run one n-aware user model with joint block context for test-time allocation."""
     with torch.no_grad():
         beam = infer_raw_precoder_torch_with_blocklength(
             model,
@@ -215,6 +231,7 @@ def infer_shared_block_precoders_torch(
     block: int,
     active_users: Sequence[int],
 ) -> dict[int, torch.Tensor]:
+    """Run a shared BS model in Torch so convergence training retains gradients."""
     channel_tensors = [
         torch.as_tensor(channel, dtype=torch.complex64, device=DEVICE)
         for channel in channels_for_block(system, block)
@@ -238,6 +255,10 @@ def build_precoder_snapshot(
     system: DownlinkSystem,
     models: Sequence[torch.nn.Module],
 ) -> list[list[np.ndarray]]:
+    """Materialize model outputs as a complete simulator precoder schedule.
+
+    Checkpoint evaluation uses this boundary before physical power projection.
+    """
     if models_output_full_bs_precoder(models):
         snapshot: list[list[np.ndarray]] = [[] for _ in range(system.K)]
         max_blocks = max((len(user_blocks) for user_blocks in system.H), default=0)
@@ -278,6 +299,10 @@ def refresh_block_precoders(
     active_users: Sequence[int],
     block: int,
 ) -> None:
+    """Refresh one schedule block from current model parameters.
+
+    Convergence solvers call this after updates to commit the latest generated beams.
+    """
     block = int(block)
     if models_output_full_bs_precoder(models):
         block_precoders = infer_shared_block_precoders_for_simulator(

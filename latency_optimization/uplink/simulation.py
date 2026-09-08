@@ -1,5 +1,4 @@
-import copy
-from typing import Iterable, List, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -30,6 +29,10 @@ def _to_complex_numpy(F) -> np.ndarray:
 
 
 def collect_uplink_interference_diagnostics(uplinksystem: UplinkSystem) -> dict:
+    """Measure signal, interference, noise, and pairwise coupling over an uplink schedule.
+
+    Reporting uses this record to explain user rate and latency outcomes.
+    """
     K = int(uplinksystem.K)
     max_blocks = max((len(v) for v in uplinksystem.n_kl), default=0)
     signal = np.full((K, max_blocks), np.nan, dtype=float)
@@ -128,6 +131,7 @@ def apply_training_solution(
     n_star: Sequence[Sequence[int]],
     F_star: Sequence[Sequence],
 ) -> None:
+    """Commit optimized uplink beams and blocklengths to simulator state."""
     K = int(uplink_system.K)
     n_kl_new: List[List[int]] = []
     F_new: List[List[np.ndarray]] = []
@@ -141,16 +145,10 @@ def apply_training_solution(
         Lk = len(nk)
         if len(F_star[k]) == 0:
             Fk = list(uplink_system.F[k])[:Lk]
-            if len(Fk) < Lk and len(Fk) > 0:
-                Fk = Fk + [np.array(Fk[-1], copy=True)] * (Lk - len(Fk))
-            F_new.append(Fk)
-            continue
-
-        Fk = [_to_complex_numpy(F) for F in F_star[k]]
-        if len(Fk) < Lk:
-            Fk = Fk + [np.array(Fk[-1], copy=True)] * (Lk - len(Fk))
         else:
-            Fk = Fk[:Lk]
+            Fk = [_to_complex_numpy(F) for F in F_star[k]][:Lk]
+        if len(Fk) < Lk and Fk:
+            Fk.extend(np.array(Fk[-1], copy=True) for _ in range(Lk - len(Fk)))
         F_new.append(Fk)
 
     uplink_system.update_system(F=F_new, n_kl=n_kl_new, regenerate_noise_on_nl_change=True)
@@ -172,6 +170,7 @@ def _evaluate_fixed_precoder_blocklength(
     candidate_n: int,
     rate_law: RateLaw = NORMAL_APPROXIMATION_RATE_LAW,
 ) -> dict[str, float | bool]:
+    """Evaluate supported bits and FBL feasibility for one fixed beam and candidate n_kl."""
     rate = evaluate_uplink_rate(
         channel,
         precoder,
@@ -187,13 +186,17 @@ def _evaluate_fixed_precoder_blocklength(
     }
 
 
-def estimate_initial_random_precoder_schedule(
+def estimate_initial_random_precoder_payload_schedule(
     system_params: dict,
     sim_cfg: dict,
     *,
     seed: int,
     allow_n_reduction: bool = True,
 ) -> dict:
+    """Build the deterministic random-beam payload reference schedule.
+
+    Proposed and benchmark methods compare against this channel-seeded baseline.
+    """
     baseline_system = UplinkSystem(system_params, seed=int(seed))
     K = int(baseline_system.K)
     n_kl_min = int(sim_cfg["n_kl_min"])
@@ -317,17 +320,22 @@ def estimate_initial_random_precoder_schedule(
             if allow_n_reduction
             else "naive_full_T_baseline"
         ),
+        "skipped_blocks_per_user": [0 for _ in range(K)],
+        "scenario_mode": PAYLOAD_MODE,
     }
 
 
-def _estimate_initial_random_precoder_schedule_for_streaming(
+def estimate_initial_random_precoder_streaming_schedule(
     system_params: dict,
     sim_cfg: dict,
     *,
     seed: int,
-    scenario: dict,
     allow_n_reduction: bool = True,
 ) -> dict:
+    """Build the deterministic random-beam reference over fixed streaming blocks."""
+    scenario = build_experiment_scenario(system_params, sim_cfg, seed=int(seed))
+    if str(scenario["mode"]) != STREAMING_MODE:
+        raise ValueError("Streaming baseline requires experiment_scenario.mode='streaming'.")
     baseline_system = UplinkSystem(system_params, seed=int(seed))
     K = int(baseline_system.K)
     n_kl_min = int(sim_cfg["n_kl_min"])
@@ -451,35 +459,8 @@ def _estimate_initial_random_precoder_schedule_for_streaming(
     }
 
 
-def estimate_initial_random_precoder_schedule_for_scenario(
-    system_params: dict,
-    sim_cfg: dict,
-    *,
-    seed: int,
-    allow_n_reduction: bool = True,
-) -> dict:
-    scenario = build_experiment_scenario(system_params, sim_cfg, seed=int(seed))
-    if str(scenario["mode"]) == STREAMING_MODE:
-        return _estimate_initial_random_precoder_schedule_for_streaming(
-            system_params,
-            sim_cfg,
-            seed=int(seed),
-            scenario=scenario,
-            allow_n_reduction=allow_n_reduction,
-        )
-
-    baseline = estimate_initial_random_precoder_schedule(
-        system_params,
-        sim_cfg,
-        seed=int(seed),
-        allow_n_reduction=allow_n_reduction,
-    )
-    baseline["skipped_blocks_per_user"] = [0 for _ in range(int(system_params["K"]))]
-    baseline["scenario_mode"] = PAYLOAD_MODE
-    return baseline
-
-
 def max_precoder_delta(F_old: Sequence[Sequence], F_new: Sequence[Sequence]) -> float:
+    """Return the largest relative beam change across a nested uplink schedule."""
     max_delta = 0.0
     K = max(len(F_old), len(F_new))
     for k in range(K):
@@ -519,6 +500,10 @@ def compute_joint_rates_torch(
     epsilon_list: Sequence[float],
     n_values: Sequence[int],
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+    """Evaluate every user's differentiable rate under one joint uplink beam snapshot.
+
+    Monte Carlo training uses this when interference couples otherwise independent user nets.
+    """
     rates: List[torch.Tensor] = []
     capacities: List[torch.Tensor] = []
     dispersions: List[torch.Tensor] = []
@@ -570,6 +555,7 @@ def build_single_block_post_training_dict(
     method_name: str,
     metadata: dict | None = None,
 ):
+    """Convert one trained block into the common result schema used by writers and plots."""
     K = int(uplinksystem.K)
     n_star = [[int(n_values[k])] for k in range(K)]
     F_star = [[F_tensors[k].detach().cpu()] for k in range(K)]

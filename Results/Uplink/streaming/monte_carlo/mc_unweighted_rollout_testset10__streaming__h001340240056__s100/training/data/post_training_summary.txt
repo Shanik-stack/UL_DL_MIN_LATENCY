@@ -1,0 +1,69 @@
+Uplink post-training summary
+Train-eval seed: 1
+Train-eval SNRs by user (dB): [0.0, 2.526315789473684, 5.473684210526316]
+Run started at: 2026-09-07T03:31:06+03:00
+Training started at: 2026-09-07T03:31:09+03:00
+Training completed at: 2026-09-07T03:45:23+03:00
+Epochs requested: 100
+Configured max epochs: 100
+Training sample unit: block
+Base training dataset: streaming_block
+Monte Carlo training style: rollout_query_objective
+Rollout anchor-bits mode: derived_online_from_current_episode_served_bits
+Per-user num epochs: [100, 100, 100]
+Per-user epochs completed: [100, 100, 100]
+Per-user training solve status: ['max_epochs_best_training_rate', 'stationary_infeasible', 'max_epochs_best_training_rate']
+Per-user restored solution source: ['highest_training_rate', 'highest_training_rate', 'highest_training_rate']
+Training samples: 20
+Last epoch mean per-user rollout rate: 9.168904
+Best epoch mean per-user rollout rate: 9.168952
+Last epoch mean per-user objective loss: -9.168904
+Best epoch mean per-user objective loss: -9.168952
+Per-user last epoch avg rate over rollout queries: [8.77656965989333, 9.247447138247283, 9.482694173470522]
+Per-user last epoch avg objective loss over rollout queries: [-8.77656965989333, -9.247447138247283, -9.482694173470522]
+Last epoch feasible rollout queries: 124 / 150
+Per-user best objective loss: [-8.776859525533823, -9.247447138247283, -9.482694173470522]
+Per-user final KKT primal residual: [0.14639753928551308, 0.09625826711240022, 0.07005601051526192]
+Per-user final KKT complementarity residual: [0.0, 0.0, 0.0]
+Per-user final KKT stationarity residual: [0.0026170755968125637, 0.000570722986652312, 0.0012942052630108768]
+Cumulative rollout queries by n_kl: {'7': 282, '8': 474, '9': 586, '10': 876, '11': 1543, '12': 3748, '13': 684, '14': 3162, '15': 680, '16': 2680}
+Cumulative frontier rollout queries by n_kl: {'7': 282, '8': 192, '9': 112, '10': 290, '11': 667, '12': 205, '13': 101, '14': 478, '15': 202}
+Last epoch rollout queries by n_kl: {'7': 3, '8': 5, '9': 6, '10': 9, '11': 16, '12': 38, '13': 7, '14': 32, '15': 7, '16': 27}
+Last epoch frontier rollout queries by n_kl: {'7': 3, '8': 2, '9': 1, '10': 3, '11': 7, '12': 2, '13': 1, '14': 5, '15': 2}
+Train-eval initial latency: [0.0008, 0.0009333333333333333, 0.0010666666666666667]
+Train-eval final latency: [0.0008, 0.0009333333333333333, 0.0010666666666666667]
+Train-eval initial blocks per user: [1, 1, 1]
+Train-eval final blocks per user: [1, 1, 1]
+Train-eval initial total n per user: [12, 14, 16]
+Train-eval final total n per user: [12, 14, 16]
+Train-eval initial served bits per user: [20, 71, 127]
+Train-eval final served bits per user: [32, 100, 160]
+Train-eval initial skipped blocks per user: [0, 0, 0]
+Train-eval final skipped blocks per user: [0, 0, 0]
+Train-eval total latency reduction (%): 0.0000
+Train-eval initial selected n_kl summary:
+{'global_selected_examples_by_n_kl': {'12': 1, '14': 1, '16': 1}, 'per_user': [{'user': 0, 'selected_examples_by_n_kl': {'12': 1}}, {'user': 1, 'selected_examples_by_n_kl': {'14': 1}}, {'user': 2, 'selected_examples_by_n_kl': {'16': 1}}]}
+Train-eval selected n_kl summary:
+{'global_selected_examples_by_n_kl': {'12': 1, '14': 1, '16': 1}, 'per_user': [{'user': 0, 'selected_examples_by_n_kl': {'12': 1}}, {'user': 1, 'selected_examples_by_n_kl': {'14': 1}}, {'user': 2, 'selected_examples_by_n_kl': {'16': 1}}]}
+
+Experiment cost
+Core wall time total (s): 853.700712
+Core wall time training (s): 853.700712
+Testing-phase wall time (s): 0.000000
+Forward+backward NN FLOPs: 6.799e+09
+Forward-only NN FLOPs: 4.620e+05
+Total NN FLOPs: 6.799e+09
+Forward+backward NN evaluations: 14715
+Forward-only NN evaluations: 3
+Optimizer steps: 680
+Workload counters:
+{'training_rollout_queries_per_user': [6360, 4517, 3838], 'train_eval_candidate_n_states_per_user': [1, 1, 1], 'batch_size': 32}
+Notes:
+- Forward+backward NN FLOPs count the rollout-query training passes that optimize the uplink precoder net.
+- Forward-only NN FLOPs count the forward-only beam evaluations used in the post-training train-eval pass.
+
+Terminology
+- train-eval: evaluation of the trained precoder nets on the first training seed
+- channel episode: one (seed, user, block=0) channel realization stored in the base dataset
+- rollout query: one visited (episode, n_kl) state generated online from the current precoder net
+- initial schedule: the random-precoder baseline used for the before-training latency

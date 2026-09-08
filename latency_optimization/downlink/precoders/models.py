@@ -126,7 +126,6 @@ class PerUserBlocklengthMlp(nn.Module):
 
     def __init__(
         self,
-        receive_antennas: int,
         transmit_antennas: int,
         streams: int,
         *,
@@ -238,11 +237,11 @@ class SharedBsBlocklengthMlp(SharedBsChannelMlp):
 
 
 def build_user_precoder_net(nr: int, nb: int, dk: int, *, device: torch.device = DEVICE) -> nn.Module:
+    """Construct the channel-only MLP used by per-user convergence optimization."""
     return PerUserChannelMlp(nr, nb, dk).to(device)
 
 
 def build_user_precoder_net_with_blocklength(
-    nr: int,
     nb: int,
     dk: int,
     *,
@@ -251,8 +250,8 @@ def build_user_precoder_net_with_blocklength(
     max_nb: int,
     device: torch.device = DEVICE,
 ) -> nn.Module:
+    """Construct the joint-context, n-aware MLP used for one user's Monte Carlo beam."""
     return PerUserBlocklengthMlp(
-        nr,
         nb,
         dk,
         user_count=k_count,
@@ -264,6 +263,7 @@ def build_user_precoder_net_with_blocklength(
 def build_shared_bs_precoder_net(
     *, k_count: int, max_nr: int, max_nb: int, max_dk: int, device: torch.device = DEVICE
 ) -> nn.Module:
+    """Construct a channel-only MLP that outputs the complete BS precoder."""
     return SharedBsChannelMlp(
         user_count=k_count,
         max_receive_antennas=max_nr,
@@ -275,6 +275,7 @@ def build_shared_bs_precoder_net(
 def build_shared_bs_precoder_net_with_blocklength(
     *, k_count: int, max_nr: int, max_nb: int, max_dk: int, device: torch.device = DEVICE
 ) -> nn.Module:
+    """Construct a joint-context, n-aware MLP that outputs the complete BS precoder."""
     return SharedBsBlocklengthMlp(
         user_count=k_count,
         max_receive_antennas=max_nr,

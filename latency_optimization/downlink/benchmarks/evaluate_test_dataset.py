@@ -19,7 +19,7 @@ from latency_optimization.results.persistence import (
 from latency_optimization.results.naming import make_method_result_tag
 
 from ..config import load_config
-from ..baselines import estimate_initial_latency_from_random_precoders
+from ..baselines import estimate_random_precoder_payload_latency
 from ..system import DownlinkSystem
 from .linear_beamforming import build_joint_linear_precoders
 
@@ -27,8 +27,9 @@ from .linear_beamforming import build_joint_linear_precoders
 def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_by_user: list[float], method: str) -> dict:
     params = with_monte_carlo_sample_snr_by_user(system_params, snr_db_by_user)
     system = DownlinkSystem(params, seed=int(seed))
+    random_baseline_failure = ""
     try:
-        initial_latency, _, _ = estimate_initial_latency_from_random_precoders(system, sim_params)
+        initial_latency, _, _ = estimate_random_precoder_payload_latency(system, sim_params)
         random_baseline_completed = True
     except RuntimeError as error:
         initial_latency = []
@@ -79,7 +80,7 @@ def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_b
             else float("nan")
         ),
         "random_baseline_completed": bool(random_baseline_completed),
-        "random_baseline_failure": str(locals().get("random_baseline_failure", "")),
+        "random_baseline_failure": random_baseline_failure,
         "final_asynchronality_seconds": float(sum(pairs)),
         "final_latency_per_user_seconds": final_latency,
         "n_kl_per_user": n_plan, "bits_per_user": bit_plan,

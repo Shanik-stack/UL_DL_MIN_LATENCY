@@ -16,13 +16,14 @@ PAYLOAD_SOURCES = {"system_B", "explicit"}
 
 
 def require_scenario_mode(value: Any) -> str:
+    """Validate the exact public scenario name: payload or streaming."""
     return require_choice(value, SCENARIO_MODES, "experiment_scenario.mode")
 
 
 def _require_integer_vector(values: Any, number_of_users: int, name: str) -> np.ndarray:
     vector = np.asarray(values, dtype=int)
     if vector.ndim == 0:
-        vector = np.full(number_of_users, int(vector.item()), dtype=int)
+        raise ValueError(f"{name} must provide one value per user; scalar broadcasting is not supported.")
     if vector.shape != (number_of_users,):
         raise ValueError(f"{name} must have shape ({number_of_users},), got {vector.shape}.")
     if np.any(vector < 0):
@@ -48,7 +49,15 @@ def validate_experiment_scenario_config(
     system_params: dict[str, Any],
     max_total_blocks: int | None = None,
 ) -> dict[str, Any]:
-    """Validate one exact scenario schema and derive its immutable targets."""
+    """Convert scenario configuration into one strict, canonical specification.
+
+    What: reject unknown or missing fields, validate per-user integer bit vectors,
+    and derive either one payload target per user or a fixed target repeated over a
+    streaming horizon. Why: allocation code should consume one unambiguous schema;
+    payload carries remaining bits between blocks, whereas streaming explicitly does
+    not. The returned mapping is safe to place in ``sim_params`` and persist in the
+    experiment manifest.
+    """
     if not isinstance(scenario_config, dict):
         raise ValueError("simulation.experiment_scenario must be a mapping.")
     if "mode" not in scenario_config:
@@ -108,7 +117,14 @@ def build_experiment_scenario(
     *,
     seed: int,
 ) -> dict[str, Any]:
-    """Build deterministic runtime state from a validated scenario config."""
+    """Instantiate the scheduling state associated with one channel seed.
+
+    What: attach the seed and expand the canonical scenario into runtime targets,
+    totals, stopping rules, and Monte Carlo sample metadata. Why: convergence,
+    Monte Carlo, and benchmark methods must receive identical payload/streaming
+    semantics when they use the same config and seed. This function creates no
+    channels or beams; it describes only the traffic instance they must serve.
+    """
     scenario_config = sim_params["experiment_scenario"]
     if not isinstance(scenario_config, dict):
         raise ValueError("simulation.experiment_scenario must be a mapping.")
@@ -160,6 +176,7 @@ def build_experiment_scenarios_for_seeds(
     sim_params: dict[str, Any],
     seeds: Sequence[int],
 ) -> list[dict[str, Any]]:
+    """Create one deterministic runtime scenario for each channel seed."""
     return [
         build_experiment_scenario(system_params, sim_params, seed=int(seed))
         for seed in seeds
@@ -203,6 +220,7 @@ def build_monte_carlo_sample_scenarios_for_seeds(
 
 
 def build_experiment_scenario_summary(scenario: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate target-bit and sample-unit metadata for saved dataset summaries."""
     mode = require_scenario_mode(scenario.get("mode"))
     summary = {
         "mode": mode,
@@ -232,6 +250,7 @@ def build_experiment_scenario_summary(scenario: dict[str, Any]) -> dict[str, Any
 
 
 def build_experiment_scenario_summary_lines(summary: dict[str, Any]) -> list[str]:
+    """Render scenario metadata as the human-readable result-summary preamble."""
     mode = require_scenario_mode(summary.get("mode"))
     lines = [
         "Experiment scenario summary",

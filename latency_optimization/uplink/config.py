@@ -12,6 +12,7 @@ from latency_optimization.physics.rate_law import resolve_rate_law
 
 from .system_parameters import initialize_system_params
 from .uplink_rate_model import validate_uplink_rate_model
+from .objective_settings import RATE_BEAM_REWARD_MODE, UNWEIGHTED_SUM_RATE_OBJECTIVE
 
 
 ALLOWED_SIMULATION_KEYS = {
@@ -44,19 +45,11 @@ ALLOWED_SIMULATION_KEYS = {
     "n_search_exponential_factor",
     "monte_carlo_test_n_search_direction",
     "monte_carlo_test_n_search_strategy",
+    "monte_carlo_test_n_search_coarse_step",
+    "monte_carlo_test_n_search_exponential_factor",
     # Used only by the deliberately small exhaustive-search benchmark.
     "exhaustive_compare",
 }
-
-UNWEIGHTED_SUM_RATE_OBJECTIVE = "unweighted_sum_rate"
-RATE_BEAM_REWARD_MODE = "rate"
-def validate_uplink_objective_mode(value) -> str:
-    return require_choice(value, {UNWEIGHTED_SUM_RATE_OBJECTIVE}, "uplink_objective_mode")
-
-
-def validate_uplink_beam_reward_mode(value) -> str:
-    return require_choice(value, {RATE_BEAM_REWARD_MODE}, "beam_reward_mode")
-
 
 def _validate_simulation_keys(sim_cfg: dict) -> None:
     unsupported = sorted(set(sim_cfg) - ALLOWED_SIMULATION_KEYS)
@@ -145,6 +138,18 @@ def _build_config(cfg: dict) -> tuple[dict, dict]:
         ),
         "n_search_coarse_step": int(sim_cfg.get("n_search_coarse_step", sim_cfg["n_kl_range"]["step"])),
         "n_search_exponential_factor": int(sim_cfg.get("n_search_exponential_factor", 2)),
+        "monte_carlo_test_n_search_direction": validate_n_search_direction(
+            sim_cfg.get("monte_carlo_test_n_search_direction", sim_cfg.get("n_search_direction", "descending"))
+        ),
+        "monte_carlo_test_n_search_strategy": validate_n_search_strategy(
+            sim_cfg.get("monte_carlo_test_n_search_strategy", sim_cfg.get("n_search_strategy", "fixed_step"))
+        ),
+        "monte_carlo_test_n_search_coarse_step": int(
+            sim_cfg.get("monte_carlo_test_n_search_coarse_step", sim_cfg.get("n_search_coarse_step", sim_cfg["n_kl_range"]["step"]))
+        ),
+        "monte_carlo_test_n_search_exponential_factor": int(
+            sim_cfg.get("monte_carlo_test_n_search_exponential_factor", sim_cfg.get("n_search_exponential_factor", 2))
+        ),
         "max_total_blocks": int(sim_cfg.get("max_total_blocks", 256)),
         "max_precoder_epochs": max(1, max_epochs),
         "print_every_epoch": int(sim_cfg.get("print_every_epoch", 1)),
@@ -177,6 +182,7 @@ def _build_config(cfg: dict) -> tuple[dict, dict]:
 
 
 def load_config(cfg_name: str) -> tuple[dict, dict, dict]:
+    """Load and strictly validate one uplink experiment configuration."""
     document = load_config_document(cfg_name)
     system_test_params, simulation_test_params = _build_config(document.data)
     return system_test_params, simulation_test_params, document.metadata

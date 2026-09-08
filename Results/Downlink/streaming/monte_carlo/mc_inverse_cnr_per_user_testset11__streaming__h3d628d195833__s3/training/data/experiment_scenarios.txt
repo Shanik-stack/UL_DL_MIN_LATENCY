@@ -1,0 +1,132 @@
+Training experiment scenarios by seed
+Experiment scenario summary
+Mode: streaming
+Seed: 1
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 2
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 4
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 5
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 6
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 7
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 8
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 9
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 10
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 11
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False
+
+Experiment scenario summary
+Mode: streaming
+Seed: 12
+Termination rule: after_number_of_blocks
+Per-user total target bits: [80, 120, 160]
+Total target bits: 360
+Monte Carlo sample unit: block
+Monte Carlo sample kind: streaming_block
+Number of blocks: 1
+Bits requested per block per user: [80, 120, 160]
+Unserved bits carried to next block: False

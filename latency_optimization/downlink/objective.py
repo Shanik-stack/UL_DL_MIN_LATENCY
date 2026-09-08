@@ -32,8 +32,8 @@ class DownlinkPrecoderObjective(nn.Module):
         active_users: Sequence[int],
         requested_bits: Mapping[int, int],
         user_weights: Mapping[int, float],
-        rate_law: RateLaw = NORMAL_APPROXIMATION_RATE_LAW,
     ) -> None:
+        """Bind immutable block physics to candidate n, bits, users, and weights."""
         super().__init__()
         self.context = context
         self.active_users = [int(user) for user in active_users]
@@ -42,6 +42,7 @@ class DownlinkPrecoderObjective(nn.Module):
         self.user_weights = {int(user): float(weight) for user, weight in user_weights.items()}
 
     def blocklength_for(self, user: int) -> int:
+        """Return the candidate n_kl assigned to an active user."""
         return int(self.blocklengths[int(user)])
 
     def finite_blocklength_rate(
@@ -49,6 +50,12 @@ class DownlinkPrecoderObjective(nn.Module):
         user: int,
         precoders: Mapping[int, torch.Tensor],
     ) -> torch.Tensor:
+        """Compute one active user's differentiable interference-coupled FBL rate.
+
+        What: form ``Sigma_k`` from all other candidate beams and evaluate the common
+        rate law at that user's ``n_kl``. Why: gradients must include how changing any
+        BS beam changes desired signal and interference within the same joint block.
+        """
         user = int(user)
         channel = self.context.channels[user]
         covariance = self.context.noise_variances[user] * torch.eye(
@@ -71,6 +78,13 @@ class DownlinkPrecoderObjective(nn.Module):
         ).rate
 
     def forward(self, precoders: Mapping[int, torch.Tensor]) -> dict[str, object]:
+        """Evaluate the complete differentiable objective for one downlink block.
+
+        What: compute per-user rates, required rates ``B_k/n_k``, ReLU rate violations,
+        per-user powers, total BS power, and weighted sum rate; return ``-weighted_rate``
+        as the loss. Why: direct-beam and neural convergence modes need one identical
+        objective and one identical set of feasibility diagnostics.
+        """
         rates: dict[int, torch.Tensor] = {}
         powers: dict[int, torch.Tensor] = {}
         required_rates: dict[int, float] = {}

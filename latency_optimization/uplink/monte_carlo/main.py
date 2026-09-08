@@ -7,6 +7,7 @@ import torch
 
 
 from latency_optimization.core.scenarios import (
+    STREAMING_MODE,
     build_experiment_scenario_summary,
     build_experiment_scenario_summary_lines,
     build_monte_carlo_sample_scenarios_for_seeds,
@@ -50,7 +51,8 @@ from latency_optimization.results.persistence import (
     write_result_manifest,
 )
 
-from ..config import load_config, validate_uplink_objective_mode
+from ..config import load_config
+from ..objective_settings import validate_uplink_objective_mode
 from ..plotting import (
     plot_F_vs_n_for_all_subblocks,
     plot_interference_before_after_heatmaps,
@@ -73,7 +75,10 @@ from ..reporting import (
     build_training_dataset_summary_lines,
 )
 from ..result_writer import save_test_results_to_txt
-from ..simulation import estimate_initial_random_precoder_schedule_for_scenario
+from ..simulation import (
+    estimate_initial_random_precoder_payload_schedule,
+    estimate_initial_random_precoder_streaming_schedule,
+)
 from ..system import UplinkSystem
 from .evaluator import (
     evaluate_blocklength_precoder_net,
@@ -95,6 +100,19 @@ def evaluate_trained_precoder_network_on_test_channel(
     test_search_overrides: dict[str, object] | None = None,
     reused_training_artifact: str | None = None,
 ):
+    """Measure trained uplink networks on one deterministic held-out channel.
+
+    What: rebuild the per-user test channels at the requested seed/SNR values, load
+    the training artifact, and perform inference-only payload or streaming allocation
+    with the configured blocklength search. The resulting schedule is compared with
+    common random and full-T references and passed through standard reporting.
+
+    Why: this is the train/test boundary: model parameters are fixed, the held-out
+    seed was absent from training, and test search overrides never update weights.
+
+    Returns: the complete persisted test record, including latency, service,
+    link-quality, convergence, timing, and FLOP diagnostics.
+    """
     configure_determinism(int(test_seed))
     system_params, sim_cfg, _ = load_config(cfg_name)
     system_params = with_monte_carlo_sample_snr_by_user(system_params, test_snr_db_by_user)
@@ -112,12 +130,17 @@ def evaluate_trained_precoder_network_on_test_channel(
         [int(test_seed)],
     )[0]
     test_scenario_summary = build_experiment_scenario_summary(test_scenario)
-    initial_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    baseline_builder = (
+        estimate_initial_random_precoder_streaming_schedule
+        if str(sim_cfg["experiment_scenario_mode"]) == STREAMING_MODE
+        else estimate_initial_random_precoder_payload_schedule
+    )
+    initial_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(test_seed),
     )
-    naive_full_t_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    naive_full_t_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(test_seed),

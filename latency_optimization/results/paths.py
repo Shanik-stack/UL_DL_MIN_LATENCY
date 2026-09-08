@@ -66,6 +66,7 @@ def build_uplink_result_dirs(
     *,
     scenario_mode: str = PAYLOAD_MODE,
 ) -> dict[str, str]:
+    """Create the standard uplink Monte Carlo training/testing artifact tree."""
     root = build_experiment_root(
         "Uplink", method_name, experiment_name, scenario_mode=scenario_mode
     )
@@ -98,6 +99,7 @@ def build_uplink_convergence_result_dirs(
     *,
     scenario_mode: str = PAYLOAD_MODE,
 ) -> dict[str, str]:
+    """Create the testing-only uplink convergence artifact tree."""
     root = build_experiment_root(
         "Uplink", method_name, experiment_name, scenario_mode=scenario_mode
     )
@@ -129,6 +131,7 @@ def build_downlink_result_dirs(
     *,
     scenario_mode: str = PAYLOAD_MODE,
 ) -> dict[str, str]:
+    """Create the standard downlink Monte Carlo training/testing artifact tree."""
     root = build_experiment_root(
         "Downlink", method_name, experiment_name, scenario_mode=scenario_mode
     )

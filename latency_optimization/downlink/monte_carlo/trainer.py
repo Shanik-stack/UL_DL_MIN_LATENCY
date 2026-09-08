@@ -29,7 +29,6 @@ from .network_operations import (
     _scenario_forward_pass,
     _scenario_objective_weights,
     _unique_trainable_parameters,
-    build_precoder_net_artifact,
 )
 from .rollout import (
     _generate_rollout_queries_for_downlink,
@@ -49,6 +48,23 @@ def train_blocklength_aware_precoder_net(
     lr: float = 1e-3,
     verbose: bool = True,
 ) -> tuple[list[torch.nn.Module], dict[str, Any], list[int]]:
+    """Train reusable downlink beamformers from seeded channel episodes.
+
+    What: build either per-user networks or one shared-BS network, roll the current
+    models through each channel episode, and collect the ``n_kl`` states reached by
+    payload or streaming allocation. A batch performs one joint optimizer update
+    using the configured weighted FBL-rate objective and the shared BS power/rate
+    constraints; no expert beam targets or precoder MSE labels are used.
+
+    Why: the base dataset should contain channels, not a manually enumerated grid of
+    blocklength labels. Regenerating rollout queries makes training follow the states
+    the current policy will actually encounter, while one optimizer preserves the
+    coupling among all beams produced for a downlink block.
+
+    Returns: the trained model list, complete training/KKT/dataset diagnostics, and
+    the number of rollout queries attributed to each user. The same model objects are
+    later saved and reused without weight updates during Monte Carlo testing.
+    """
     K = int(system_params["K"])
     model_scope = validate_downlink_precoder_net_scope(sim_params.get("downlink_precoder_net_scope", "per_user_nets"))
     streaming_blocklength_input_mode = validate_shared_bs_streaming_blocklength_input_mode(
@@ -261,15 +277,13 @@ def train_blocklength_aware_precoder_net(
                     rate_violation_pos = torch.relu(rate_violation)
                     term = -(float(scenario_user_weights[int(k)]) * rate)
                     scenario_term = scenario_term + term
+                    rate_value = float(rate.detach().cpu())
                     total_active_weight += 1.0
                     epoch_term_sums[k] += float(term.detach().cpu())
                     epoch_term_counts[k] += 1.0
-                    epoch_rate_sums[k] += float(rate.detach().cpu())
+                    epoch_rate_sums[k] += rate_value
                     epoch_rate_violation_sums[k] += float(rate_violation_pos.detach().cpu())
-                    epoch_weighted_rate_sum += (
-                        float(scenario_user_weights[int(k)])
-                        * float(rate.detach().cpu())
-                    )
+                    epoch_weighted_rate_sum += float(scenario_user_weights[int(k)]) * rate_value
                     epoch_active_weight_sum += 1.0
                     scenario_has_active_user = True
                 block_power_violation = forward["block_power_violation"]
@@ -528,6 +542,5 @@ def train_blocklength_aware_precoder_net(
 
 
 __all__ = [
-    "build_precoder_net_artifact",
     "train_blocklength_aware_precoder_net",
 ]

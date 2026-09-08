@@ -74,6 +74,7 @@ def build_result_tag(
     solver_mode: str | None = None,
     cfg_hash: str | None = None,
 ) -> str:
+    """Build the compact method/config/seed identifier used for result directories."""
     method_parts = [format_method_tag(method_name)]
     if objective_mode:
         method_parts.append(format_objective_tag(objective_mode))
@@ -521,6 +522,20 @@ def run_downlink_experiment(
     *,
     output_root: str | None = None,
 ) -> dict:
+    """Execute and persist one complete downlink convergence experiment.
+
+    What: validate the config, seed every random source, construct the system and
+    scenario, measure the common random-precoder baseline, dispatch the selected
+    optimizer, and compute the final latency, service, link-quality, convergence,
+    and cost summaries. It then writes the manifest, text/JSON data, and plots to the
+    content-hashed result directory.
+
+    Why: method implementations should solve communication problems, not duplicate
+    experiment setup or reporting. This orchestration boundary guarantees that two
+    methods run with the same channel realization and accounting conventions.
+
+    Returns: the in-memory result record exactly corresponding to the persisted run.
+    """
     if method_name not in OPTIMIZERS:
         known = ", ".join(sorted(OPTIMIZERS))
         raise ValueError(f"Unknown method '{method_name}'. Expected one of: {known}")

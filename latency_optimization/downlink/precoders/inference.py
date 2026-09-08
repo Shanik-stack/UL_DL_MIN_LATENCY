@@ -38,6 +38,7 @@ def infer_raw_precoder_torch(
     *,
     user_index=None,
 ) -> torch.Tensor:
+    """Decode one channel-only user model output into its complex beam slice."""
     output = model(channel, user_index=user_index)
     full = _complex_precoder(output, int(model.output_nb), int(model.output_dk))
     return full[: int(nb), : int(dk)]
@@ -55,6 +56,7 @@ def infer_raw_precoder_torch_with_blocklength(
     *,
     user_index=None,
 ) -> torch.Tensor:
+    """Decode one n-aware user-model output while preserving gradients."""
     output = model(
         channels,
         int(blocklength),
@@ -74,6 +76,7 @@ def infer_raw_bs_precoders_torch(
     nb: Sequence[int],
     dk: Sequence[int],
 ) -> list[torch.Tensor]:
+    """Split one shared channel-only model output into all user beam matrices."""
     if not model_outputs_full_bs_precoder(model):
         raise ValueError("A full-BS-output model is required.")
     return _split_full_bs_precoder(
@@ -95,6 +98,7 @@ def infer_raw_bs_precoders_torch_with_blocklength(
     nb: Sequence[int],
     dk: Sequence[int],
 ) -> list[torch.Tensor]:
+    """Split one shared n-aware model output into all user beam matrices."""
     if not model_outputs_full_bs_precoder(model):
         raise ValueError("A full-BS-output model is required.")
     return _split_full_bs_precoder(

@@ -28,6 +28,7 @@ class ConfigDocument:
 
 
 def load_config_document(config_name: str) -> ConfigDocument:
+    """Resolve a YAML name/path and return its data plus canonical path metadata."""
     if not str(config_name).endswith(".yaml"):
         raise ValueError(f"Configuration name must end with '.yaml'; got {config_name!r}.")
 
@@ -76,6 +77,7 @@ def build_monte_carlo_sampling_settings(
     scenario_mode: str,
     nominal_snr_db: Sequence[float],
 ) -> dict[str, Any]:
+    """Validate scenario-specific sample counts and per-user train/test SNR ranges."""
     training_channels = optional_int(simulation.get("monte_carlo_num_training_channels"))
     training_blocks = optional_int(simulation.get("monte_carlo_num_training_blocks"))
     test_channels = optional_int(simulation.get("monte_carlo_num_test_channels"))

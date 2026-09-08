@@ -49,8 +49,6 @@ class DownlinkSystem:
         self.snr_db = np.asarray(self.sc["snr_db"], dtype=float)
         self.epsilon = np.asarray(self.sc["epsilon"], dtype=float)
         self.T = np.asarray(self.sc["T"], dtype=int)
-        self.initial_bits_per_symbol = np.asarray(self.sc["initial_bits_per_symbol"], dtype=float)
-        self.initial_latency = np.asarray(self.sc["initial_latency"], dtype=float)
 
         self.n_kl: List[List[int]] = [[int(self.T[k])] for k in range(self.K)]
         self.H: List[List[np.ndarray]] = [[] for _ in range(self.K)]
@@ -108,6 +106,7 @@ class DownlinkSystem:
         F_override=None,
         active_users: list[int] | None = None,
     ) -> float:
+        """Return total BS transmit power across all selected user beams in one block."""
         source = self.F if F_override is None else F_override
         users = [int(k) for k in (active_users if active_users is not None else range(self.K))]
         total_power = 0.0
@@ -124,6 +123,11 @@ class DownlinkSystem:
         F_override=None,
         active_users: list[int] | None = None,
     ) -> np.ndarray:
+        """Construct the physical BS precoder for one block as ``F_b=[F_1,b,...,F_K,b]``.
+
+        Why: user beam slices are stored separately for scheduling, but BS power and
+        joint transmission refer to their column-wise concatenation as one matrix.
+        """
         source = self.F if F_override is None else F_override
         users = [int(k) for k in (active_users if active_users is not None else range(self.K))]
         block_beams: list[np.ndarray] = []
@@ -143,6 +147,11 @@ class DownlinkSystem:
         active_users: list[int] | None = None,
         eps: float = 1e-12,
     ) -> None:
+        """Enforce ``sum_k ||F_k,b||_F^2 <= P_BS`` by one common in-place scale.
+
+        Why: scaling users independently would change their relative powers and would not
+        represent projection of the full BS precoder onto its single block-power constraint.
+        """
         users = [int(k) for k in (active_users if active_users is not None else range(self.K))]
         scale = joint_power_scale_numpy(
             (
@@ -161,6 +170,12 @@ class DownlinkSystem:
             F_nested[k][int(block)] = np.asarray(F_nested[k][int(block)], dtype=np.complex128) * scale
 
     def ensure_block(self, user: int, block: int, template_precoder: np.ndarray | None = None) -> None:
+        """Create all missing ``H_k,l`` and ``F_k,l`` entries through ``block``.
+
+        What: channels use deterministic per-user/block RNG; beams use ``template_precoder``
+        or a deterministic random sample and are power-projected. Why: online payload
+        allocation can extend schedules while remaining reproducible for a fixed seed.
+        """
         k = int(user)
         l = int(block)
 
@@ -204,6 +219,11 @@ class DownlinkSystem:
             self.sigma2[k] = p_sig / max(snr_lin, 1e-30)
 
     def get_interference_plus_noise_covariance(self, user: int, block: int, F_override=None) -> np.ndarray:
+        """Build ``Sigma_k = sigma_k^2 I + sum_{j!=k} H_k F_j F_j^H H_k^H``.
+
+        ``F_override`` evaluates an uncommitted joint candidate. This covariance is passed
+        to the common MIMO FBL equation so candidate rates include multiuser interference.
+        """
         k = int(user)
         l = self._resolve_block_index(k, block, F_override=F_override)
         Hk = self.H[k][l]
@@ -223,6 +243,12 @@ class DownlinkSystem:
         return cov
 
     def compute_block_rate(self, user: int, block: int, n_kl: int, F_override=None) -> float:
+        """Compute user k's FBL rate for ``(H_k,l, F_l, Sigma_k,l, n_k,l, epsilon_k)``.
+
+        What: derive interference covariance, call the canonical Torch rate law without
+        gradients, and return a scalar rate. Why: all scheduling and baseline decisions
+        must use exactly the same physical-rate implementation as optimization.
+        """
         k = int(user)
         l = self._resolve_block_index(k, block, F_override=F_override)
         Hk = self.H[k][l]
@@ -239,6 +265,12 @@ class DownlinkSystem:
         return scalar_rate_result(result).rate
 
     def apply_solution(self, F_new: List[List[np.ndarray]], n_kl_new: List[List[int]]) -> None:
+        """Replace simulator state with a completed ``F_kl`` and ``n_kl`` schedule.
+
+        What: validate positive blocklengths, create/truncate matching channel state,
+        copy beams, enforce each block's BS power constraint, and recompute metrics.
+        Why: result reporting must describe the final accepted plan, not temporary solver state.
+        """
         self.n_kl = [list(map(int, blocks)) for blocks in n_kl_new]
         for k in range(self.K):
             for l, n_kl in enumerate(self.n_kl[k]):
@@ -269,6 +301,10 @@ class DownlinkSystem:
         self.update_metrics()
 
     def update_metrics(self) -> None:
+        """Recompute committed schedule metrics from current system state.
+
+        It sets user latency ``sum_l n_kl/fs_k`` and stores C, V, and R_fbl for every block.
+        """
         self.n = np.array([sum(v) for v in self.n_kl], dtype=int)
         self.latency = self.n / self.fs
 
@@ -300,6 +336,7 @@ class DownlinkSystem:
             self.R_fbl.append(np.asarray(Rk, dtype=float))
 
     def get_snr_sinr_db(self) -> tuple[list[float], list[float]]:
+        """Return per-user schedule-averaged SNR and SINR for result reporting."""
         snr_db = []
         sinr_db = []
         for k in range(self.K):

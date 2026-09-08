@@ -1,0 +1,62 @@
+Uplink optimizer summary
+
+Setup
+Method: Benchmark RZF
+Benchmark beamformer: Regularized Zero Forcing
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\experiments\uplink_dispersion_heavy.yaml
+Config content hash: 0bf63a83399e
+Seed: 3
+Run started at: 2026-09-08T12:45:31+03:00
+Run completed at: 2026-09-08T12:45:33+03:00
+Scenario: payload
+Uplink rate model: snr
+Uplink objective mode: unweighted_sum_rate
+Beam reward mode: rate
+Convergence precoder update mode: closed_form_benchmark
+Precoder parameterization: self_channel_regularized_zero_forcing_closed_form
+Initial schedule source: random_precoder_baseline
+Average RZF alpha across block builds: 1.639198e+00
+Closed-form beamformer builds: 6
+
+Final test results
+Initial total latency (random baseline): 0.004867
+Final total latency: 0.003933
+Latency reduction vs random precoder baseline (%): 19.1781
+Initial avg latency (random baseline): 0.001622
+Final avg latency: 0.001311
+Initial asynchronality sum (random baseline): 0.000933
+Final asynchronality sum: 0.000800
+Asynchronality reduction (%): 14.2857
+Initial avg served-user SNR (dB): 4.5774
+Final avg served-user SNR (dB): 3.5051
+Initial avg served-user SINR (dB): -3.7874
+Final avg served-user SINR (dB): -3.9309
+Final served-block avg capacity C: 13.094578
+Final served-block avg dispersion V: 8.232062
+Final served-block avg finite-blocklength penalty: 7.653698
+Final served-block avg penalty/C ratio: 0.587609
+Total served bits: 360
+Total skipped blocks: 0
+Initial total latency (naive full-T baseline): 0.005600
+Latency reduction vs naive full-T baseline (%): 29.7619
+
+Per-user final test details
+User 0 | init_lat=0.001333 | final_lat=0.001067 | lat_red_vs_random=20.0000% | init_snr=3.0905 dB | final_snr=1.4741 dB | init_sinr=-4.9281 dB | final_sinr=-5.6086 dB | blocks=2 | total_n=16 | served_bits=80 | skipped_blocks=0 | lat_red_vs_fullT=33.3333%
+User 1 | init_lat=0.001800 | final_lat=0.001400 | lat_red_vs_random=22.2222% | init_snr=3.9221 dB | final_snr=3.9867 dB | init_sinr=-4.9016 dB | final_sinr=-3.3613 dB | blocks=2 | total_n=21 | served_bits=120 | skipped_blocks=0 | lat_red_vs_fullT=25.0000%
+User 2 | init_lat=0.001733 | final_lat=0.001467 | lat_red_vs_random=15.3846% | init_snr=6.7196 dB | final_snr=5.0545 dB | init_sinr=-1.5324 dB | final_sinr=-2.8228 dB | blocks=2 | total_n=22 | served_bits=160 | skipped_blocks=0 | lat_red_vs_fullT=31.2500%
+
+Experiment cost
+Core wall time total (s): 2.234795
+Core wall time training (s): 0.000000
+Testing-phase wall time (s): 2.234795
+Forward+backward NN FLOPs: 0.000e+00
+Forward-only NN FLOPs: 0.000e+00
+Total NN FLOPs: 0.000e+00
+Forward+backward NN evaluations: 0
+Forward-only beam evaluations: 6
+Actual optimizer updates: 0
+Workload counters:
+{'closed_form_beamformer_build_calls': 6}
+Notes:
+- This benchmark uses a closed-form analytical uplink precoder, so NN FLOP counters are reported as 0.0.
+- Core wall time is reported under testing because there is no separate training phase.

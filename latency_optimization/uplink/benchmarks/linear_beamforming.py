@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Callable
@@ -10,7 +9,7 @@ import numpy as np
 
 
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import PAYLOAD_MODE
+from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE
 from latency_optimization.core.validation import require_choice
 from latency_optimization.experiments.cost import format_experiment_cost_lines
 from latency_optimization.experiments.configuration import load_config_document
@@ -18,30 +17,19 @@ from latency_optimization.experiments.determinism import configure_determinism
 from latency_optimization.results.console import format_latency_log_line, format_log_line
 from latency_optimization.results.naming import make_method_result_tag
 from latency_optimization.results.paths import build_uplink_convergence_result_dirs
-from latency_optimization.results.persistence import current_local_timestamp, save_json, save_text
+from latency_optimization.results.persistence import current_local_timestamp
 
 from ..config import load_config
-from ..plotting import (
-    plot_interference_before_after_heatmaps,
-    plot_interference_heatmaps,
-    plot_kkt_residual_history,
-    plot_latency_and_asynchronality_from_json,
-    plot_link_quality_from_json,
-    plot_per_user_interference_before_after,
-    plot_per_user_interference_profiles,
-    plot_per_user_schedule_details,
-    plot_user_config,
-)
 from ..reporting import (
     _build_uplink_final_test_section_lines,
     _build_uplink_per_user_test_lines,
     build_convergence_result,
 )
-from ..result_writer import save_test_results_to_txt
 from ..simulation import (
     apply_training_solution,
     clone_nested_arrays,
-    estimate_initial_random_precoder_schedule_for_scenario,
+    estimate_initial_random_precoder_payload_schedule,
+    estimate_initial_random_precoder_streaming_schedule,
 )
 from ..system import UplinkSystem
 from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate
@@ -84,6 +72,7 @@ def build_zero_forcing_precoder(
     sigma2: float,
     power_budget: float,
 ) -> tuple[np.ndarray, dict[str, Any]]:
+    del sigma2  # Kept in the common ZF/RZF builder interface.
     H = np.asarray(H_kl, dtype=np.complex128)
     _, singular_values, vh = np.linalg.svd(H, full_matrices=False)
     d_eff = max(0, min(int(dk), int(len(singular_values))))
@@ -226,6 +215,19 @@ def run_uplink_closed_form_benchmark(
     verbose: bool = True,
     system_params_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Run a complete payload experiment with a closed-form uplink beamformer.
+
+    What: load one deterministic held-out channel, build the requested conventional
+    ZF/RZF precoder for each reached user block, evaluate it with the same FBL law,
+    search feasible ``n_kl`` values, and apply the common payload-completion latency
+    accounting. No neural-network training or gradient optimization occurs.
+
+    Why: keeping only the beam construction different provides a controlled baseline
+    for convergence and Monte Carlo methods. Config hashing, random reference
+    schedules, plots, and summary metrics remain comparable to optimized runs.
+
+    Returns: the complete benchmark result that is also written to its result folder.
+    """
     method_name = require_choice(method_key, set(BENCHMARK_METHODS), "uplink benchmark method")
     spec = BENCHMARK_METHODS[method_name]
     configure_determinism(int(seed))
@@ -257,12 +259,17 @@ def run_uplink_closed_form_benchmark(
     )
     core_start = perf_counter()
 
-    initial_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    baseline_builder = (
+        estimate_initial_random_precoder_streaming_schedule
+        if str(sim_cfg["experiment_scenario_mode"]) == STREAMING_MODE
+        else estimate_initial_random_precoder_payload_schedule
+    )
+    initial_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(seed),
     )
-    naive_full_t_baseline = estimate_initial_random_precoder_schedule_for_scenario(
+    naive_full_t_baseline = baseline_builder(
         system_params,
         sim_cfg,
         seed=int(seed),
@@ -376,28 +383,26 @@ def run_uplink_closed_form_benchmark(
                     coarse_step=sim_cfg.get("n_search_coarse_step", int(n_kl_step)),
                     exponential_factor=sim_cfg.get("n_search_exponential_factor", 2),
                 )
-                search_result = run_n_frontier_search(
-                    search_cfg,
-                    lambda candidate_n, _stage: {
+
+                def evaluate_candidate(candidate_n: int, _stage: str) -> dict[str, float | bool]:
+                    candidate_rate = evaluate_uplink_rate(
+                        H_kl,
+                        F_kl,
+                        sigma2,
+                        epsilon,
+                        int(candidate_n),
+                        noise_plus_interference_cov,
+                    ).rate
+                    return {
                         "feasible": (
                             float(B_used) / float(max(int(candidate_n), 1))
-                        ) <= evaluate_uplink_rate(
-                            H_kl,
-                            F_kl,
-                            sigma2,
-                            epsilon,
-                            int(candidate_n),
-                            noise_plus_interference_cov,
-                        ).rate,
-                        "R_candidate": evaluate_uplink_rate(
-                            H_kl,
-                            F_kl,
-                            sigma2,
-                            epsilon,
-                            int(candidate_n),
-                            noise_plus_interference_cov,
-                        ).rate,
-                    },
+                        ) <= candidate_rate,
+                        "R_candidate": candidate_rate,
+                    }
+
+                search_result = run_n_frontier_search(
+                    search_cfg,
+                    evaluate_candidate,
                 )
                 for accepted in search_result["accepted"]:
                     best_n = int(accepted["n_kl"])

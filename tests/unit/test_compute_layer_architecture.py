@@ -1,3 +1,6 @@
+import ast
+import builtins
+import symtable
 import unittest
 from pathlib import Path
 
@@ -6,6 +9,45 @@ ROOT = Path(__file__).resolve().parents[2] / "latency_optimization"
 
 
 class ComputeLayerArchitectureTests(unittest.TestCase):
+    def test_modules_do_not_reference_undefined_global_names(self) -> None:
+        builtin_names = set(dir(builtins))
+        runtime_names = {"__file__", "__name__", "__package__", "__path__"}
+        unresolved: dict[str, list[str]] = {}
+
+        for path in ROOT.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            module_table = symtable.symtable(source, str(path), "exec")
+            defined_at_module_scope = {
+                symbol.get_name()
+                for symbol in module_table.get_symbols()
+                if symbol.is_assigned()
+                or symbol.is_imported()
+                or symbol.is_namespace()
+                or symbol.is_parameter()
+            }
+            globally_referenced: set[str] = set()
+
+            def collect_global_references(table: symtable.SymbolTable) -> None:
+                globally_referenced.update(
+                    symbol.get_name()
+                    for symbol in table.get_symbols()
+                    if symbol.is_referenced() and symbol.is_global()
+                )
+                for child in table.get_children():
+                    collect_global_references(child)
+
+            collect_global_references(module_table)
+            missing = sorted(
+                globally_referenced
+                - defined_at_module_scope
+                - builtin_names
+                - runtime_names
+            )
+            if missing:
+                unresolved[str(path.relative_to(ROOT))] = missing
+
+        self.assertEqual({}, unresolved)
+
     def test_physics_has_no_parallel_numpy_rate_implementation(self) -> None:
         physics_source = "\n".join(
             path.read_text(encoding="utf-8") for path in (ROOT / "physics").glob("*.py")
@@ -42,6 +84,58 @@ class ComputeLayerArchitectureTests(unittest.TestCase):
             source = (ROOT / link / "config.py").read_text(encoding="utf-8")
             self.assertIn("def load_config(", source)
             self.assertNotIn("def get_config(", source)
+
+    def test_payload_and_streaming_baselines_are_explicit(self) -> None:
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for link in ("uplink", "downlink")
+            for path in (ROOT / link).rglob("*.py")
+        )
+        self.assertNotIn("random_precoder_schedule_for_scenario", source)
+        self.assertNotIn("random_precoders_for_scenario", source)
+
+    def test_uplink_has_one_active_monte_carlo_evaluation_path(self) -> None:
+        uplink_source = "\n".join(
+            path.read_text(encoding="utf-8") for path in (ROOT / "uplink").rglob("*.py")
+        )
+        self.assertNotIn("evaluate_payload_with_trained_precoder_network", uplink_source)
+        self.assertFalse((ROOT / "uplink" / "model_service.py").exists())
+
+    def test_critical_execution_functions_explain_their_role(self) -> None:
+        required = {
+            "downlink/block_state.py": {
+                "expand_precoders_for_plan",
+                "ensure_precoder_block",
+                "user_link_budget",
+                "evaluate_block_candidate",
+            },
+            "downlink/system.py": {
+                "compose_full_precoder",
+                "project_block_precoders_to_power",
+                "compute_block_rate",
+                "apply_solution",
+            },
+            "physics/finite_blocklength.py": {
+                "finite_blocklength_from_metric",
+                "finite_blocklength_mimo",
+            },
+            "uplink/uplink_rate_model.py": {
+                "build_uplink_rate_covariance_torch",
+                "evaluate_uplink_rate_tensor",
+            },
+        }
+        for relative_path, function_names in required.items():
+            tree = ast.parse((ROOT / relative_path).read_text(encoding="utf-8"))
+            definitions = {
+                node.name: ast.get_docstring(node)
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            for function_name in function_names:
+                self.assertTrue(
+                    definitions.get(function_name),
+                    f"{relative_path}:{function_name} needs a technical docstring",
+                )
 
 
 if __name__ == "__main__":

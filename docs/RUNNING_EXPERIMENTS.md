@@ -6,11 +6,11 @@ This project exposes one package-level batch command:
 
 and one default batch-run configuration:
 
-`C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO\configs\batch_runs\run_all.yaml`
+`C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\configs\batch_runs\run_all.yaml`
 
 ## Default full run
 
-From `C:\All Codes\Taiwan_Internship\UL_UPLINK_DOWNLINK_MONTE_CARLO`:
+From `C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY`:
 
 ```powershell
 python -m latency_optimization batch

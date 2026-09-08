@@ -39,6 +39,10 @@ class UplinkSystem:
         *,
         rate_law: RateLaw | None = None,
     ):
+        """Create deterministic per-user channel, beam, signal, and noise state.
+
+        This object is the authoritative uplink simulator used by every method and baseline.
+        """
         self.sc = system_constants
         self.seed = int(seed)
         self.rate_law = rate_law or resolve_rate_law(str(system_constants["finite_blocklength_rate_law"]))
@@ -142,6 +146,7 @@ class UplinkSystem:
         return 10.0 * np.log10(max(float(value), 1e-30))
 
     def _resolve_metric_block_index(self, user: int, block: int, F_override=None, require_x: bool = False) -> int:
+        """Map a metric query to available user state while handling shorter schedules."""
         lengths = [len(self.H[user])]
 
         if F_override is not None and user < len(F_override) and len(F_override[user]) > 0:
@@ -158,6 +163,7 @@ class UplinkSystem:
         return min(int(block), min(valid_lengths) - 1)
 
     def _build_effective_metric_matrix(self, user: int, block: int, F_override=None) -> np.ndarray:
+        """Build the whitened effective-channel Gram matrix consumed by the FBL law."""
         k = int(user)
         l = self._resolve_metric_block_index(k, block, F_override=F_override)
         H_k = self._as_complex_array(self.H[k][l])
@@ -178,6 +184,10 @@ class UplinkSystem:
         return 0.5 * (A + A.conj().T)
 
     def get_interference_plus_noise_covariance(self, user: int, block: int, F_override=None) -> np.ndarray:
+        """Build receive covariance from fixed noise and every other user's transmission.
+
+        SINR-mode evaluation uses it; SNR mode bypasses it through the rate-model adapter.
+        """
         k = int(user)
         Nr = int(self.NR[k])
         R = float(self.sigma2[k]) * np.eye(Nr, dtype=np.complex128)
@@ -323,15 +333,17 @@ class UplinkSystem:
     # ============================================================
     # Noise + receive generation (sigma2 fixed)
     # ============================================================
+    def _generate_noise_block(self, user: int, block: int, blocklength: int) -> np.ndarray:
+        """Generate the deterministic noise realization for one user block."""
+        sigma = np.sqrt(float(self.sigma2[user]))
+        rng = self._rng_for(user, block, self.STREAM_N)
+        return sigma * self._cn(rng, (self.NR[user], int(blocklength)))
+
     def _generate_noise_all(self) -> None:
         self.N = [[] for _ in range(self.K)]
         for k in range(self.K):
-            sigma = np.sqrt(float(self.sigma2[k]))
             for l in range(self.L[k]):
-                n_kl = int(self.n_kl[k][l])
-                rng_n = self._rng_for(k, l, self.STREAM_N)
-                N_kl = sigma * self._cn(rng_n, (self.NR[k], n_kl))
-                self.N[k].append(N_kl)
+                self.N[k].append(self._generate_noise_block(k, l, self.n_kl[k][l]))
 
     def _generate_received_all(self) -> None:
         self.Y = [[] for _ in range(self.K)]
@@ -366,18 +378,9 @@ class UplinkSystem:
         # create new H,F,X
         self._ensure_block(k, l_new)
 
-        # create noise for the new block with fixed sigma2
-        sigma = np.sqrt(float(self.sigma2[k]))
-        rng_n = self._rng_for(k, l_new, self.STREAM_N)
-        N_new = sigma * self._cn(rng_n, (self.NR[k], int(self.n_kl[k][l_new])))
+        # update_system computes the received signal and all derived metrics.
+        N_new = self._generate_noise_block(k, l_new, self.n_kl[k][l_new])
         self.N[k].append(N_new)
-
-        # received
-        Y_new = self.H[k][l_new] @ (self.F[k][l_new] @ self.X[k][l_new]) + N_new
-        self.Y[k].append(Y_new)
-
-        # update metrics
-        self._recompute_latency()
         self.update_system()
 
     def regenerate_received(self, regenerate_noise: bool = False) -> None:
@@ -400,8 +403,7 @@ class UplinkSystem:
         - If n_kl changes: X/N/Y shapes change. We regenerate X and (optionally) N deterministically.
         - sigma2 stays fixed (per your requirement).
         """
-        # ---------- track what changed ----------
-        old_n_kl = [list(v) for v in self.n_kl]  # deep-ish copy of lists of ints
+        old_n_kl = [list(values) for values in self.n_kl]
         nl_changed = False
 
         # ---------- apply updates ----------
@@ -416,20 +418,7 @@ class UplinkSystem:
                         raise ValueError(
                             f"Uplink n_kl must be strictly positive; got n_kl[{k}][{l}]={int(n_kl_val)}."
                         )
-            # check if any length differs
-            if len(old_n_kl) != len(self.n_kl):
-                nl_changed = True
-            else:
-                for k in range(self.K):
-                    if len(old_n_kl[k]) != len(self.n_kl[k]):
-                        nl_changed = True
-                        break
-                    for l in range(len(self.n_kl[k])):
-                        if int(old_n_kl[k][l]) != int(self.n_kl[k][l]):
-                            nl_changed = True
-                            break
-                    if nl_changed:
-                        break
+            nl_changed = old_n_kl != self.n_kl
 
         # ---------- ensure consistency with L ----------
         # Keep L derived from n_kl (recommended). This avoids silent mismatches.
@@ -463,49 +452,34 @@ class UplinkSystem:
                     self.X[k][l] = self._cn(rng_x, (self.dk[k], n_kl))
 
                     if regenerate_noise_on_nl_change:
-                        # Regenerate N deterministically with fixed sigma2 and new n_kl
-                        sigma = np.sqrt(float(self.sigma2[k]))
-                        rng_n = self._rng_for(k, l, self.STREAM_N)
-                        N_new = sigma * self._cn(rng_n, (self.NR[k], n_kl))
+                        N_new = self._generate_noise_block(k, l, n_kl)
                         if l >= len(self.N[k]):
                             self.N[k].append(N_new)
                         else:
                             self.N[k][l] = N_new
                     else:
-                        # Keep old N content if possible (truncate/extend deterministically)
-                        # If extending, append fresh samples deterministically.
                         if l >= len(self.N[k]):
-                            sigma = np.sqrt(float(self.sigma2[k]))
-                            rng_n = self._rng_for(k, l, self.STREAM_N)
-                            self.N[k].append(sigma * self._cn(rng_n, (self.NR[k], n_kl)))
+                            self.N[k].append(self._generate_noise_block(k, l, n_kl))
                         else:
                             N_old = self.N[k][l]
                             n_old = N_old.shape[1]
-                            if n_kl == n_old:
-                                pass
-                            elif n_kl < n_old:
+                            if n_kl < n_old:
                                 self.N[k][l] = N_old[:, :n_kl]
-                            else:
-                                # extend deterministically
-                                sigma = np.sqrt(float(self.sigma2[k]))
-                                rng_n = self._rng_for(k, l, self.STREAM_N)
-                                N_full = sigma * self._cn(rng_n, (self.NR[k], n_kl))
-                                # overwrite with deterministic full so behavior is consistent
-                                self.N[k][l] = N_full
+                            elif n_kl > n_old:
+                                self.N[k][l] = self._generate_noise_block(k, l, n_kl)
 
         # ---------- recompute Y for all blocks (always needed if F changed; needed if X/N changed too) ----------
         # Ensure N exists for every block even if nl_changed=False and N was never generated (defensive)
         for k in range(self.K):
-            sigma = np.sqrt(float(self.sigma2[k]))
             for l in range(self.L[k]):
                 n_kl = int(self.n_kl[k][l])
 
                 if l >= len(self.N[k]) or self.N[k][l].shape != (self.NR[k], n_kl):
-                    rng_n = self._rng_for(k, l, self.STREAM_N)
+                    noise = self._generate_noise_block(k, l, n_kl)
                     if l >= len(self.N[k]):
-                        self.N[k].append(sigma * self._cn(rng_n, (self.NR[k], n_kl)))
+                        self.N[k].append(noise)
                     else:
-                        self.N[k][l] = sigma * self._cn(rng_n, (self.NR[k], n_kl))
+                        self.N[k][l] = noise
 
                 Y_new = self.H[k][l] @ (self.F[k][l] @ self.X[k][l]) + self.N[k][l]
                 if l >= len(self.Y[k]):
@@ -521,7 +495,6 @@ class UplinkSystem:
         self.C, self.V, self.R_fbl, self.usr_avg_C = [], [], [], []
         for k in range(self.K):
             Lk = self.L[k]
-            Nr = self.NR[k]
             eps = float(self.epsilon[k])
 
             Tk = np.asarray(self.n_kl[k], dtype=float)

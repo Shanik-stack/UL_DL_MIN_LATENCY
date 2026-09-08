@@ -29,6 +29,7 @@ simulation:
     - [0.0, 8.0]
     - [0.0, 8.0]
   monte_carlo_num_test_blocks: 11
+  monte_carlo_test_seed: 3
   monte_carlo_test_snr_db_ranges:
     - [0.0, 8.0]
     - [0.0, 8.0]
@@ -50,3 +51,7 @@ simulation:
   n_search_strategy: fixed_step
   n_search_coarse_step: 2
   n_search_exponential_factor: 2
+  monte_carlo_test_n_search_direction: descending
+  monte_carlo_test_n_search_strategy: fixed_step
+  monte_carlo_test_n_search_coarse_step: 2
+  monte_carlo_test_n_search_exponential_factor: 2

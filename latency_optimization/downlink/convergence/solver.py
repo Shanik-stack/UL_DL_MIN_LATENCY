@@ -6,7 +6,6 @@ import numpy as np
 import torch
 
 from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import STREAMING_MODE, build_experiment_scenario
 from latency_optimization.core.validation import require_choice
 from latency_optimization.optimization.stopping import KktResiduals, convergence_status_from_config
 from latency_optimization.precoders.power import joint_power_scale_torch
@@ -14,7 +13,7 @@ from latency_optimization.precoders.parameters import (
     complex_parameter,
     complex_tensor_from_parameter,
 )
-from latency_optimization.results.console import format_log_line, format_latency_log_line, format_progress_log_line
+from latency_optimization.results.console import format_log_line, format_progress_log_line
 from latency_optimization.runtime import DEVICE
 
 from ..block_state import (
@@ -34,10 +33,6 @@ from ..objective import DownlinkBlockContext, DownlinkPrecoderObjective
 from ..objective_settings import (
     INVERSE_CNR_WEIGHTED_SUM_RATE as INVERSE_CNR_WEIGHTED_SUM_RATE_PUBLIC_NAME,
     INVERSE_CNR_WEIGHT_STRATEGY,
-    get_convergence_objective_name,
-    objective_display_name,
-    objective_weight_strategy_name,
-    validate_convergence_objective_mode,
     validate_convergence_priority_weight_strategy,
     validate_objective_mode,
 )
@@ -52,6 +47,7 @@ from .solver_state import (
 
 CONVERGENCE_PRECODER_UPDATE_MODES = {"precoder_net", "direct_precoder"}
 def validate_convergence_precoder_update_mode(sim_params: dict[str, Any]) -> str:
+    """Select neural-network weights or beam entries as convergence variables."""
     return require_choice(
         sim_params.get("convergence_precoder_update_mode", "precoder_net"),
         CONVERGENCE_PRECODER_UPDATE_MODES,
@@ -65,6 +61,7 @@ def _project_active_precoders_to_block_power(
     active_users: List[int],
     eps: float = 1e-12,
 ) -> dict[int, torch.Tensor]:
+    """Apply the joint BS power constraint to differentiable active-user beams."""
     if len(active_users) == 0:
         return precoders
     scale = joint_power_scale_torch(
@@ -82,6 +79,7 @@ def _build_block_context(
     active_users: Sequence[int],
     block: int,
 ) -> DownlinkBlockContext:
+    """Cache channel, noise, reliability, and power tensors shared within one block solve."""
     return DownlinkBlockContext(
         channels={
             int(k): torch.as_tensor(
@@ -112,7 +110,14 @@ def _evaluate_block_objective(
     direct_precoders: dict[int, torch.Tensor] | None = None,
     block_context: DownlinkBlockContext | None = None,
 ) -> dict[str, Any]:
-    canonical_mode = validate_objective_mode(objective_mode)
+    """Evaluate one differentiable joint block state.
+
+    What: obtain updated beams from direct parameters, a shared BS network, or selected
+    user networks; keep all other beams fixed; jointly enforce BS power; then evaluate
+    ``DownlinkPrecoderObjective``. Why: every solver mode must be compared and stopped
+    using the same rates, interference coupling, power constraint, and loss definition.
+    """
+    validate_objective_mode(objective_mode)
     update_user_set = {int(k) for k in update_users}
 
     precoders: dict[int, torch.Tensor] = {}
@@ -183,6 +188,7 @@ def _resolve_block_user_weights(
     sim_params: dict[str, Any],
     objective_mode: str,
 ) -> tuple[dict[int, float], str]:
+    """Resolve normalized inverse-CNR user weights for the current active block."""
     if len(active_users) <= 0:
         return {}, INVERSE_CNR_WEIGHT_STRATEGY
 
@@ -213,6 +219,12 @@ def _optimize_user_block_precoder_for_objective(
     n_kl_overrides: dict[int, int] | None = None,
     block_context: DownlinkBlockContext | None = None,
 ) -> np.ndarray:
+    """Perform one optimizer update for one user's precoder network.
+
+    What: backpropagate the joint block loss through user k's network only, infer its
+    updated beam, insert it beside the unchanged user beams, and project total BS power.
+    Why: this is the ordered per-user-network update used within a downlink epoch.
+    """
     k = int(user)
     l = int(block)
     model_optimizer.zero_grad()
@@ -258,6 +270,12 @@ def _optimize_active_block_precoders_direct(
     n_kl_overrides: dict[int, int] | None = None,
     block_context: DownlinkBlockContext | None = None,
 ) -> dict[int, np.ndarray]:
+    """Perform one optimizer update with complex beam entries as the variables.
+
+    What: convert selected ``F_k,l`` matrices to real/imaginary parameters, differentiate
+    the joint objective, update them with Adam, and jointly project BS power. Why: this
+    convergence option solves the current channel directly without an MLP parameterization.
+    """
     if len(update_users) == 0:
         return {}
 
@@ -307,6 +325,7 @@ def _block_delta(
     active_users: List[int],
     block: int,
 ) -> float:
+    """Measure the largest relative active-beam change used by stationarity stopping."""
     deltas = []
     for k in active_users:
         prev = np.asarray(before_beams[k], dtype=np.complex128)
@@ -324,6 +343,12 @@ def _all_committed_bits_feasible(
     committed_bits: dict[int, int],
     n_kl_targets: dict[int, int],
 ) -> tuple[bool, dict[int, float], list[int]]:
+    """Verify that a candidate joint state still supports every committed bit allocation.
+
+    For each active user, recompute ``R_k`` at its proposed ``n_k`` and require
+    ``B_k/n_k <= R_k``. It returns overall feasibility, measured rates, and the users
+    that failed; reduced-n search uses this before accepting a state.
+    """
     user_rates: dict[int, float] = {}
     infeasible_users: list[int] = []
     for k in active_users:
@@ -346,6 +371,12 @@ def _resolve_reduced_n_reoptimization_users(
     infeasible_users: list[int],
     scope: str,
 ) -> list[int]:
+    """Map reduced-n repair policy to the exact set of beam variables re-optimized.
+
+    The candidate user changed n, while other users may become infeasible because the
+    joint beam/interference state changes. The configured scope chooses all active users,
+    only failing users, or the candidate plus failing users.
+    """
     ordered_active = [int(k) for k in active_users]
     infeasible_set = {int(k) for k in infeasible_users}
     scope_key = require_choice(
@@ -385,6 +416,24 @@ def _reduce_blocklengths_with_reoptimization(
     user_weights: dict[int, float],
     verbose: bool,
 ) -> tuple[dict[int, dict[str, Any]], list[dict[str, float]]]:
+    """Search for shorter per-user blocklengths after the full-length solve.
+
+    What: start each active user at ``n_kl = T_k`` with the bits supported by the
+    accepted joint beam. A reduction round lets every still-eligible user propose
+    at most one shorter candidate before any user receives another turn. Candidate
+    beams are re-optimized according to ``n_kl_reduction_update_scope`` and accepted
+    only when every committed requirement ``B_j <= n_j R_j(F, n_j)`` remains true.
+
+    Why: downlink beams share interference and one BS power budget, so changing
+    user k's beam can invalidate service already assigned to user j. Round-based
+    proposals prevent user ordering from giving one user repeated reductions, while
+    the joint feasibility check prevents an individually attractive change from
+    corrupting the block schedule.
+
+    Returns: one final allocation record per active user plus the optimization
+    histories generated by accepted or rejected re-solves. A user leaves the search
+    permanently after its first infeasible smaller candidate.
+    """
     n_min = int(sim_params["n_kl_min"])
     n_step = int(sim_params["n_kl_step"])
     reoptimization_scope = require_choice(
@@ -480,6 +529,12 @@ def _reduce_blocklengths_with_reoptimization(
             )
 
             def _evaluate_candidate_n(candidate_n: int, stage_name: str) -> dict[str, Any]:
+                """Evaluate and transactionally accept or reject one reduced n candidate.
+
+                First test the current beams. If service fails, checkpoint solver state,
+                re-optimize the configured users, and test again. A failed repair restores
+                beams, networks, and optimizer state so it cannot affect later candidates.
+                """
                 candidate_targets = dict(current_n_targets)
                 candidate_targets[k_int] = int(candidate_n)
                 feasible_without_reopt, candidate_rates, infeasible_users = _all_committed_bits_feasible(
@@ -651,6 +706,24 @@ def optimize_precoders_for_block(
     users_to_update: List[int] | None = None,
     max_epochs: int | None = None,
 ) -> dict[str, Any]:
+    """Solve the coupled beamforming problem for one downlink transmission block.
+
+    What: assemble all active-user beams into ``F_b = [F_1,b, ..., F_K,b]``, optimize
+    either those complex entries or the configured network parameters, and enforce
+    the single BS constraint ``||F_b||_F^2 <= P_BS`` by joint projection. Each epoch
+    evaluates the configured weighted FBL-rate objective, requested-bit constraints,
+    and KKT residuals after the parameter update.
+
+    Why: every user's SINR depends on all columns of ``F_b``. This function is the
+    common continuous solver used by initial ``n=T`` allocation and reduced-n
+    re-optimization, ensuring that no caller treats user beams as independent when
+    interference or total BS power is evaluated.
+
+    Returns: the committed block beams, per-user rates and constraint measurements,
+    epoch diagnostics, and a solve status. If strict feasibility is not reached, the
+    selected checkpoint follows the solver's configured feasible/best-state policy
+    rather than blindly returning the last epoch.
+    """
     history: list[dict[str, float]] = []
     if len(active_users) == 0:
         return {
@@ -665,7 +738,6 @@ def optimize_precoders_for_block(
     print_every = max(1, int(sim_params.get("print_every_epoch", 1)))
     max_epochs = max(1, int(max_epochs if max_epochs is not None else sim_params["max_epochs"]))
     canonical_mode = validate_objective_mode(objective_mode)
-    objective_label = INVERSE_CNR_WEIGHTED_SUM_RATE_PUBLIC_NAME
     block_context = _build_block_context(system, active_users, block)
 
     best_objective = -float("inf")
@@ -726,7 +798,6 @@ def optimize_precoders_for_block(
             for k in active_users:
                 working_F[int(k)][int(block)] = np.asarray(block_precoders[int(k)], dtype=np.complex128)
             system.project_block_precoders_to_power(working_F, int(block), active_users=[int(j) for j in active_users])
-            shared_optimizer.zero_grad()
         else:
             for k in update_users:
                 beam_k = _optimize_user_block_precoder_for_objective(
@@ -746,9 +817,6 @@ def optimize_precoders_for_block(
                 )
                 working_F[int(k)][block] = np.array(beam_k, copy=True)
                 system.project_block_precoders_to_power(working_F, int(block), active_users=[int(j) for j in active_users])
-
-            for k in update_users:
-                model_optimizers[int(k)].zero_grad()
         with torch.no_grad():
             state = _evaluate_block_objective(
                 system,

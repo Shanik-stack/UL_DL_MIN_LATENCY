@@ -59,7 +59,6 @@ def _build_training_user_models(
 
     return [
         build_user_precoder_net_with_blocklength(
-            int(system_params["Nr"][k]),
             int(system_params["Nb"][k]),
             int(system_params["dk"][k]),
             k_count=K,
@@ -309,6 +308,11 @@ def _scenario_forward_pass(
     anchor_bits: Sequence[int] | None = None,
     inference_counters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate all active downlink users from one differentiable BS state.
+
+    It performs either one shared-BS forward pass or one pass per user, applies
+    the joint power projection, then computes interference-coupled FBL rates.
+    """
     K = int(system_params["K"])
     cache = _get_scenario_tensor_cache(scenario, K)
     active_mask = cache["active_mask_np"]
@@ -704,6 +708,7 @@ def build_precoder_net_artifact(
     precoder_net_training_history: dict[str, Any],
     training_dataset_sizes: Sequence[int],
 ) -> dict[str, Any]:
+    """Package trained models, architecture metadata, and history for persistence."""
     model_scope = validate_downlink_precoder_net_scope(sim_params.get("downlink_precoder_net_scope", "per_user_nets"))
     streaming_blocklength_input_mode = validate_shared_bs_streaming_blocklength_input_mode(
         sim_params.get(

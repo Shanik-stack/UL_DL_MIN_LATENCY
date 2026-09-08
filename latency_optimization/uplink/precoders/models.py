@@ -65,6 +65,7 @@ def build_user_precoder_net(
     *,
     device: torch.device = DEVICE,
 ) -> UplinkPrecoderMlp:
+    """Construct the supported n-aware uplink MLP for one user."""
     return UplinkPrecoderMlp(receive_antennas, transmit_antennas, streams).to(device)
 
 

@@ -43,6 +43,12 @@ def _build_training_block_scenario(
     *,
     scenario_mode: str,
 ) -> dict[str, Any]:
+    """Create the immutable network input for one visited downlink block.
+
+    What: ensure active users have block state, mask inactive beams, and store channels,
+    activity, scenario type, and input interference covariances. Why: an epoch needs a
+    reproducible description of the exact joint state from which its beams were predicted.
+    """
     for k, flag in enumerate(active_mask):
         if float(flag) > 0.5:
             ensure_precoder_block(system, working_F, int(k), int(block))
@@ -68,6 +74,12 @@ def _apply_forward_to_working_precoders(
     block: int,
     forward: dict[str, Any] | None,
 ) -> None:
+    """Advance the rollout's beam state using one completed network forward pass.
+
+    Active users receive their predicted beams; inactive users receive zero beams.
+    Later rollout blocks and n candidates therefore observe interference produced by
+    the current networks rather than the initial random precoders.
+    """
     if forward is None:
         return
     active_mask = list(forward.get("active_mask", []))
@@ -98,6 +110,13 @@ def _collect_downlink_tail_rollout_queries(
     service_mask: Sequence[int | float],
     reducible_users: Sequence[int],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Explore smaller blocklengths for bits supportable at the full blocklength.
+
+    What: hold committed bits fixed, reduce active users' n targets, evaluate the current
+    networks, and retain visited feasible states plus the first infeasible frontier.
+    Why: these are the n-aware examples that teach one network how beam choice changes
+    near the minimum feasible blocklength instead of training only at ``n=T``.
+    """
     tail_scenario = _build_training_block_scenario(
         system,
         working_F,
@@ -285,6 +304,11 @@ def _collect_downlink_episode_rollout_queries(
     training_episode: dict[str, Any],
     user_models: Sequence[torch.nn.Module],
 ) -> list[dict[str, Any]]:
+    """Roll one channel episode forward and collect its visited joint states.
+
+    Payload episodes add blocks until completion; streaming episodes contribute
+    independent block requests. No static channel/n grid is constructed.
+    """
     seed = int(training_episode["seed"])
     scenario = dict(training_episode["scenario"])
     scenario_mode = str(scenario.get("mode", PAYLOAD_MODE))
@@ -410,11 +434,10 @@ def _collect_downlink_episode_rollout_queries(
 
     remaining = np.asarray(scenario["payload_bits_per_user"], dtype=int).copy()
     block = 0
-    while np.any(remaining > 0):
-        if block >= max_blocks:
-            raise RuntimeError(
-                f"Monte Carlo training rollout hit max_total_blocks={max_blocks} for seed={seed} with remaining bits {remaining.tolist()}."
-            )
+    payload_stop_reason: str | None = None
+    payload_blocks_visited = 0
+    while np.any(remaining > 0) and block < max_blocks:
+        payload_blocks_visited = int(block) + 1
         active_mask = [1 if int(remaining[int(k)]) > 0 else 0 for k in range(system.K)]
         full_scenario = _build_training_block_scenario(
             system,
@@ -454,6 +477,7 @@ def _collect_downlink_episode_rollout_queries(
             # zero-service blocks cannot change the rollout state; stop here and let the
             # next training epoch revisit this episode with the updated network.
             episode_queries[-1]["rollout_stage"] = "zero_service_frontier"
+            payload_stop_reason = "zero_service_frontier"
             break
 
         service_scenario = _build_training_block_scenario(
@@ -520,6 +544,17 @@ def _collect_downlink_episode_rollout_queries(
         remaining = np.maximum(remaining - np.asarray(committed_bits, dtype=int), 0)
         block += 1
 
+    if episode_queries:
+        episode_completed = not bool(np.any(remaining > 0))
+        episode_queries[-1]["episode_completed"] = bool(episode_completed)
+        episode_queries[-1]["episode_stop_reason"] = (
+            "payload_completed"
+            if episode_completed
+            else payload_stop_reason or "max_total_blocks_reached"
+        )
+        episode_queries[-1]["episode_blocks_visited"] = int(payload_blocks_visited)
+        episode_queries[-1]["episode_remaining_bits_at_stop"] = [int(value) for value in remaining]
+
     return episode_queries
 
 
@@ -529,6 +564,12 @@ def _generate_rollout_queries_for_downlink(
     training_episodes: Sequence[dict[str, Any]],
     user_models: Sequence[torch.nn.Module],
 ) -> list[dict[str, Any]]:
+    """Regenerate all training queries from the current model parameters.
+
+    What: execute a complete payload or streaming rollout for each base sample and merge
+    every visited joint state. Why: training data follows states induced by the improving
+    networks rather than remaining a fixed hand-built grid throughout training.
+    """
     rollout_queries: list[dict[str, Any]] = []
     for training_episode in training_episodes:
         rollout_queries.extend(
@@ -559,6 +600,18 @@ def _summarize_downlink_rollout_queries(rollout_queries: Sequence[dict[str, Any]
     )
     feasible_queries = int(sum(1 for query in rollout_queries if bool(query.get("rollout_feasible", False))))
     infeasible_queries = int(len(rollout_queries) - feasible_queries)
+    payload_episode_outcomes = {
+        int(query["seed"]): {
+            "completed": bool(query["episode_completed"]),
+            "stop_reason": str(query["episode_stop_reason"]),
+            "blocks_visited": int(query["episode_blocks_visited"]),
+            "remaining_bits_at_stop": [
+                int(value) for value in query["episode_remaining_bits_at_stop"]
+            ],
+        }
+        for query in rollout_queries
+        if "episode_completed" in query
+    }
     return {
         **summary,
         **frontier_summary,
@@ -566,6 +619,15 @@ def _summarize_downlink_rollout_queries(rollout_queries: Sequence[dict[str, Any]
         "feasible_rollout_queries": int(feasible_queries),
         "infeasible_rollout_queries": int(infeasible_queries),
         "frontier_rollout_queries": int(len(frontier_queries)),
+        "payload_episode_outcomes": {
+            str(seed): outcome for seed, outcome in sorted(payload_episode_outcomes.items())
+        },
+        "completed_payload_episodes": int(
+            sum(bool(outcome["completed"]) for outcome in payload_episode_outcomes.values())
+        ),
+        "truncated_payload_episodes": int(
+            sum(not bool(outcome["completed"]) for outcome in payload_episode_outcomes.values())
+        ),
     }
 
 
@@ -695,6 +757,11 @@ def _summarize_training_cases_with_n_kl(
 
 
 def summarize_training_dataset(training_episodes: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Describe the immutable base samples supplied before rollout generation.
+
+    It reports seed count, sample unit, scenario, per-user SNR coverage, and users.
+    Rollout-query counts are reported separately because one channel can visit many n states.
+    """
     if len(training_episodes) == 0:
         return {
             "total_training_samples": 0,
@@ -768,6 +835,12 @@ def build_training_dataset(
     *,
     verbose: bool = True,
 ) -> list[dict[str, Any]]:
+    """Create the immutable base dataset from requested channel seeds and SNR ranges.
+
+    Payload: one sample is a channel episode whose later blocks are generated during its
+    rollout. Streaming: one sample is one independent channel block. This function does
+    not enumerate n values; the current-network rollout creates those training queries.
+    """
     snr_db_by_user_by_seed = build_training_snr_schedule(
         train_seeds,
         sim_params["monte_carlo_training_snr_db_ranges"],

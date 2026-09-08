@@ -32,6 +32,7 @@ class ScalarRateResult:
 
 
 def scalar_rate_result(result: TorchRateResult) -> ScalarRateResult:
+    """Detach a differentiable rate result at the compute/reporting boundary."""
     return ScalarRateResult(
         rate=float(result.rate.detach().cpu()),
         capacity=float(result.capacity.detach().cpu()),
@@ -42,6 +43,7 @@ def scalar_rate_result(result: TorchRateResult) -> ScalarRateResult:
 
 @lru_cache(maxsize=256)
 def q_inverse(epsilon: float) -> float:
+    """Return the cached Gaussian Q-function inverse used by the FBL penalty."""
     epsilon_value = float(epsilon)
     if not 0.0 < epsilon_value < 1.0:
         raise ValueError(f"epsilon must be strictly between 0 and 1, got {epsilon_value}.")
@@ -64,6 +66,12 @@ def finite_blocklength_from_metric(
     n_kl: int,
     epsilon: float,
 ) -> TorchRateResult:
+    """Evaluate the normal approximation from a Hermitian effective-channel metric.
+
+    What: compute ``C=log2 det(I+A)``, eigenvalue-based channel dispersion ``V``,
+    penalty ``Q^-1(epsilon)*sqrt(V/n)``, and ``R_fbl=C-penalty``. Why: keeping this
+    equation here guarantees every link, optimizer, and benchmark uses identical FBL physics.
+    """
     blocklength = _validate_blocklength(n_kl)
     effective_metric = _hermitian_torch(metric)
     identity = torch.eye(
@@ -106,6 +114,12 @@ def finite_blocklength_mimo(
     *,
     covariance_jitter: float = 0.0,
 ) -> TorchRateResult:
+    """Convert ``(H,F,Sigma)`` into the metric required by the normal approximation.
+
+    What: solve ``L G = H F`` for the Cholesky factor ``Sigma=L L^H``, form
+    ``A=G G^H``, then call ``finite_blocklength_from_metric``. Why: whitening includes
+    colored interference/noise without explicitly forming the less stable ``Sigma^-1``.
+    """
     covariance = _hermitian_torch(
         noise_covariance.to(device=channel.device, dtype=channel.dtype)
     )

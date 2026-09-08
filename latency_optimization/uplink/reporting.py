@@ -156,6 +156,7 @@ def _flatten_uplink_epoch_history(all_user_block_results: Sequence[Sequence[Sequ
 
 
 def compute_summary_metrics(result: dict[str, Any]) -> dict[str, Any]:
+    """Derive latency, service, asynchronality, link-quality, and convergence summaries."""
     initial_latency = [float(x) for x in result["initial_latency"]]
     final_latency = [float(x) for x in result["final_latency"]]
     K = len(final_latency)
@@ -358,6 +359,7 @@ def build_precoder_net_result(
     uplink_rate_model: str | None = None,
     naive_full_t_baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Assemble uplink Monte Carlo training/testing outputs into the canonical result record."""
     _, final_snr_db = test_uplinksystem.get_SNR()
     _, final_sinr_db = test_uplinksystem.get_SINR()
     if final_interference_diag is None:
@@ -518,6 +520,7 @@ def build_convergence_result(
     sim_cfg: dict[str, Any] | None = None,
     naive_full_t_baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Assemble an uplink training-only schedule and baseline comparisons for saving."""
     _, final_snr_db = uplinksystem.get_SNR()
     _, final_sinr_db = uplinksystem.get_SINR()
     if final_interference_diag is None:

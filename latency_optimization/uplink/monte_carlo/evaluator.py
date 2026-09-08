@@ -14,8 +14,6 @@ from latency_optimization.precoders.serialization import precoder_to_numpy
 from ..precoders.inference import infer_precoder
 from ..simulation import (
     apply_training_solution,
-    clone_nested_arrays,
-    collect_uplink_interference_diagnostics,
     ensure_blocks_up_to,
 )
 from ..system import UplinkSystem
@@ -40,6 +38,12 @@ def _evaluate_precoder_network_for_streaming(
     *,
     method_name: str,
 ) -> dict:
+    """Evaluate trained uplink networks over a fixed streaming horizon.
+
+    What: infer beams, independently serve each block's fixed B_k target, discard any
+    unserved bits rather than carrying them forward, and record n/rate/service per user.
+    Why: this preserves streaming semantics while measuring inference-only performance.
+    """
     scenario = build_experiment_scenario(uplinksystem.sc, sim_cfg, seed=int(uplinksystem.seed))
     block_targets = np.asarray(scenario["streaming_bit_targets_by_block"], dtype=int)
     num_blocks = int(scenario["number_of_blocks"])
@@ -248,6 +252,11 @@ def evaluate_blocklength_precoder_net(
     *,
     method_name: str,
 ) -> dict:
+    """Run inference-only uplink allocation for one held-out channel episode.
+
+    Each user's n-aware network is queried at candidate blocklengths; achieved
+    FBL rates determine committed bits and the final latency schedule.
+    """
     scenario = build_experiment_scenario(uplinksystem.sc, sim_cfg, seed=int(uplinksystem.seed))
     if str(scenario["mode"]) == STREAMING_MODE:
         return _evaluate_precoder_network_for_streaming(
@@ -271,7 +280,6 @@ def evaluate_blocklength_precoder_net(
     }
 
     n_kl_min = int(sim_cfg["n_kl_min"])
-    n_kl_step = int(sim_cfg["n_kl_step"])
     use_interference = uses_uplink_interference(sim_cfg)
     snapshot_cache: list[list[torch.Tensor]] | None = ([[] for _ in range(K)] if use_interference else None)
 
