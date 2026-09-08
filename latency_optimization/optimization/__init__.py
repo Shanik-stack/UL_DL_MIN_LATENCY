@@ -1,6 +1,6 @@
 """Optimization utilities shared by uplink and downlink."""
 
-from .stopping import (
+from .convergence_criteria import (
     CONVERGENCE_STOPPING_RULES,
     KKT_RESIDUALS,
     OBJECTIVE_STATIONARITY,

@@ -3,10 +3,10 @@ import unittest
 
 
 PUBLIC_RUN_MODULES = (
-    "latency_optimization.uplink.convergence.main",
-    "latency_optimization.uplink.monte_carlo.main",
-    "latency_optimization.downlink.convergence.main",
-    "latency_optimization.downlink.monte_carlo.main",
+    "latency_optimization.uplink.methods.convergence.experiment",
+    "latency_optimization.uplink.methods.monte_carlo.experiment",
+    "latency_optimization.downlink.methods.convergence.experiment",
+    "latency_optimization.downlink.methods.monte_carlo.experiment",
     "latency_optimization.uplink.benchmarks.evaluate_test_dataset",
     "latency_optimization.downlink.benchmarks.evaluate_test_dataset",
 )

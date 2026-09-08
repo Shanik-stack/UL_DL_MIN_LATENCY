@@ -19,7 +19,7 @@ from latency_optimization.results.persistence import (
 from latency_optimization.results.naming import make_method_result_tag
 
 from .linear_beamforming import run_uplink_closed_form_benchmark
-from ..config import load_config
+from ..configuration.loader import load_config
 
 
 def _aggregate(episodes: list[dict]) -> dict:
@@ -51,18 +51,19 @@ def main() -> None:
         run_meta["cfg_stem"],
         cfg_hash=run_meta.get("cfg_hash"),
     )
+    system_params, sim_params, _ = load_config(args.cfg_name)
+    scenario_mode = str(sim_params["experiment_scenario_mode"])
     result_root = build_experiment_root(
         "Uplink",
         f"Benchmark {args.method.upper()}",
         tag,
-        scenario_mode="payload",
+        scenario_mode=scenario_mode,
     )
     output_dir = result_root / "testing" / "data"
 
     episodes: list[dict] = []
     for seed in manifest["seeds"]:
         snr_db_by_user = manifest["snr_db_by_user_by_seed"][str(seed)]
-        system_params, _, _ = load_config(args.cfg_name)
         experiment = run_uplink_closed_form_benchmark(
             method_key=args.method,
             cfg_name=args.cfg_name,
@@ -98,7 +99,7 @@ def main() -> None:
         setup={
             "link": "Uplink",
             "method": f"Benchmark {args.method.upper()}",
-            "scenario": "payload",
+            "scenario": scenario_mode,
             "config_path": run_meta["cfg_path"],
             "config_hash": run_meta.get("cfg_hash"),
             "test_seeds": [int(seed) for seed in manifest["seeds"]],

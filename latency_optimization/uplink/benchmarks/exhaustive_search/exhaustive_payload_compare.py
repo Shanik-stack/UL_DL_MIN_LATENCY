@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 
-from latency_optimization.core.scenarios import PAYLOAD_MODE
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.scenarios import PAYLOAD_MODE
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.experiments.configuration import load_config_document
 from latency_optimization.project import BENCHMARK_CONFIG_ROOT
 from latency_optimization.precoders.parameters import complex_parameter
@@ -39,22 +39,22 @@ from latency_optimization.results.persistence import (
 )
 from latency_optimization.runtime import DEVICE
 
-from ...config import load_config
-from ...objective_settings import (
+from ...configuration.loader import load_config
+from ...objectives.settings import (
     RATE_BEAM_REWARD_MODE,
     UNWEIGHTED_SUM_RATE_OBJECTIVE,
     validate_uplink_beam_reward_mode,
     validate_uplink_objective_mode,
 )
-from ...objective import UplinkPrecoderObjective
-from ...convergence.solver import (
+from ...objectives.precoder import UplinkPrecoderObjective
+from ...methods.convergence.optimize_precoder import (
     optimize_precoder_for_nl,
     validate_convergence_precoder_update_mode,
 )
-from ...convergence.allocation import optimize_user_blocklength_and_precoder
-from ...simulation import ensure_blocks_up_to
-from ...system import UplinkSystem
-from ...uplink_rate_model import UPLINK_RATE_MODEL_SNR, build_uplink_rate_covariance
+from ...methods.convergence.optimize_user_transmission import optimize_user_blocklength_and_precoder
+from ...simulation.operations import ensure_blocks_up_to
+from ...simulation.system import UplinkSystem
+from ...physics.rate import UPLINK_RATE_MODEL_SNR, build_uplink_rate_covariance
 
 
 METHOD_NAME = "small_exhaustive_payload_compare"

@@ -6,8 +6,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..system import DownlinkSystem
-from latency_optimization.core.validation import require_choice
+from ..simulation.system import DownlinkSystem
+from latency_optimization.experiments.config_validation import require_choice
 
 
 def build_joint_linear_precoders(

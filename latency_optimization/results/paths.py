@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.scenarios import PAYLOAD_MODE, STREAMING_MODE
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.project import RESULTS_ROOT
 
 

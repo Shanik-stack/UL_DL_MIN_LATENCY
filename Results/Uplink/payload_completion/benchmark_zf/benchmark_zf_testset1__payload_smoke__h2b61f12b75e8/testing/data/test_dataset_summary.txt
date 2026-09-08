@@ -1,0 +1,8 @@
+Uplink ZF held-out test dataset summary
+Total held-out channel episodes: 1
+mean_final_total_latency_seconds: 0.000400
+std_final_total_latency_seconds: 0.000000
+mean_latency_reduction_vs_random_percent: 0.000000
+std_latency_reduction_vs_random_percent: 0.000000
+mean_final_asynchronality_seconds: 0.000133
+std_final_asynchronality_seconds: 0.000000

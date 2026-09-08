@@ -103,6 +103,10 @@ For fair Monte Carlo comparison, use the held-out manifest generated at:
 Results/<Link>/<scenario>/monte_carlo/<run>/testing/channels/manifest.json
 ```
 
+Payload uses `testing/channels/manifest.json`; streaming uses
+`testing/blocks/manifest.json`. ZF and RZF support both scenarios and preserve
+the scenario semantics from the matching configuration.
+
 Uplink held-out benchmarks:
 
 ```powershell

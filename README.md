@@ -22,12 +22,14 @@ next block always starts with a fresh `B[k]` target.
 
 ## What Is In This Repository
 
-- `latency_optimization/uplink/`
-  - uplink system model, convergence, Monte Carlo, benchmarks, and plotting
-- `latency_optimization/downlink/`
-  - downlink system model, convergence, Monte Carlo, benchmarks, and plotting
-- `latency_optimization/core/`, `experiments/`, and `results/`
-  - shared mathematical rules, experiment infrastructure, and result handling
+- `latency_optimization/uplink/methods/`
+  - uplink convergence and Monte Carlo experiment entry points
+- `latency_optimization/downlink/methods/`
+  - downlink convergence and Monte Carlo experiment entry points
+- `latency_optimization/optimization/`
+  - shared blocklength search and convergence criteria
+- `latency_optimization/physics/`, `experiments/`, and `results/`
+  - rate laws, experiment infrastructure, and result handling
 - `configs/experiments/`
   - self-contained payload-completion and streaming experiment YAML files
 - `configs/benchmarks/`

@@ -1,0 +1,31 @@
+Run manifest
+
+Setup
+link: Downlink
+method: Benchmark RZF
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\downlink_streaming_smoke.yaml
+config_hash: 8c10927d73ea
+test_seeds: [9]
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Downlink\streaming\benchmark_rzf\benchmark_rzf_testset1__streaming_smoke__h8c10927d73ea
+Files recorded: 4
+Result artifacts: 2
+Plots: 0
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 2
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt

@@ -1,0 +1,96 @@
+Downlink optimizer summary
+
+Setup
+Method: monte_carlo_precoder_net_train_test
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\downlink_streaming_smoke.yaml
+Test seed: 9
+Train seeds: [1]
+Run started at: 2026-09-08T22:02:56+03:00
+Run completed at: 2026-09-08T22:03:00+03:00
+Scenario: streaming
+Objective mode: inverse_cnr_weighted_sum_rate
+Allocation mode: streaming
+Weight strategy: inverse_cnr
+Downlink precoder-net scope: per_user_nets
+Precoder parameterization: per_user_block_context_to_precoder_mlp
+Training objective: scenario_driven_rollout_inverse_cnr_weighted_sum_rate_finite_blocklength_rate
+Test n search strategy: fixed_step
+Test n search direction: descending
+Initial schedule source: random_precoder_baseline
+Training dataset sample kind: streaming_block
+Training dataset sample unit: block
+Training dataset total samples: 1
+Training SNR ranges by user (dB): [[4.0, 4.0], [4.0, 4.0]]
+Training sample counts per user: [1, 1]
+
+Final test results
+Initial total latency (random baseline): 0.000533
+Final total latency: 0.000533
+Latency reduction vs random precoder baseline (%): 0.0000
+Initial avg latency (random baseline): 0.000267
+Final avg latency: 0.000267
+Initial asynchronality sum (random baseline): 0.000000
+Final asynchronality sum: 0.000000
+Asynchronality reduction (%): 0.0000
+Initial avg served-user SNR (dB): n/a (no served blocks)
+Final avg served-user SNR (dB): n/a (no served blocks)
+Initial avg served-block SINR (dB): n/a (no served blocks)
+Final avg served-block SINR (dB): n/a (no served blocks)
+Total served bits: 0
+Total skipped blocks: 2
+Initial total latency (naive full-T baseline): 0.000533
+Latency reduction vs naive full-T baseline (%): 0.0000
+Total target bits: 2
+Total unserved bits: 2
+Total partially served blocks: 0
+Total zero-service blocks: 2
+
+Training results
+Epochs requested: 1
+Epochs completed: 1
+Training solve status: max_epochs_best_training_objective
+Base training dataset: streaming_block
+Rollout anchor-bits mode: derived_online_from_current_episode_served_bits
+Last epoch rollout-weighted avg sum rate: -1.541201
+Best epoch rollout-weighted avg sum rate: -1.541201
+Last epoch mean per-user rollout rate: -0.770601
+Best epoch mean per-user rollout rate: -0.770601
+Last epoch mean per-user objective loss: 0.806563
+Best epoch mean per-user objective loss: 0.806563
+Per-user last epoch avg rate over active rollout queries: [-0.8864783048629761, -0.6547228693962097]
+Per-user last epoch avg objective loss over active rollout queries: [1.1615923643112183, 0.45153290033340454]
+Last epoch feasible rollout queries: 0 / 1 (0.000000)
+
+Per-user final test details
+User 0 | init_lat=0.000267 | final_lat=0.000267 | lat_red_vs_random=0.0000% | init_served_block_sinr=n/a | final_served_block_sinr=n/a | blocks=1 | total_n=4 | served_bits=0 | skipped_blocks=1 | lat_red_vs_fullT=0.0000% | target_bits=1 | unserved_bits=1 | partial_blocks=0 | zero_service_blocks=1
+User 1 | init_lat=0.000267 | final_lat=0.000267 | lat_red_vs_random=0.0000% | init_served_block_sinr=n/a | final_served_block_sinr=n/a | blocks=1 | total_n=4 | served_bits=0 | skipped_blocks=1 | lat_red_vs_fullT=0.0000% | target_bits=1 | unserved_bits=1 | partial_blocks=0 | zero_service_blocks=1
+
+Per-pair asynchronality
+Users 0-1 | initial_diff=0.000000 | final_diff=0.000000
+
+Additional training details
+Global active-user rollout queries by n_kl over all epochs: {'4': 2}
+Per-user active-user rollout queries by n_kl over all epochs: [{'4': 1}, {'4': 1}]
+Per-user active-user frontier rollout queries by n_kl over all epochs: [{}, {}]
+
+Experiment cost
+Core wall time total (s): 0.364707
+Core wall time training (s): 0.324638
+Testing-phase wall time (s): 0.040069
+Forward+backward NN FLOPs: 5.568e+05
+Forward-only NN FLOPs: 3.712e+05
+Total NN FLOPs: 9.281e+05
+Forward+backward NN evaluations: 2
+Forward-only NN evaluations: 4
+Optimizer steps: 1
+Workload counters:
+{'training_active_user_rollout_queries_per_user': [1, 1], 'training_joint_rollout_queries': 1, 'batch_size': 32, 'test_forward_calls_per_user': [2, 2], 'test_total_forward_calls': 4}
+Notes:
+- Forward+backward NN FLOPs count the active-user rollout-query training passes that optimize the downlink precoder nets.
+- Testing-phase wall time measures only the held-out downlink precoder-net evaluation; plotting, file export, and baseline reconstruction are excluded.
+- Forward-only NN FLOPs count the forward-only beam evaluations in the held-out downlink test pass.
+
+Terminology
+- payload channel episode: one seed-based channel anchor whose later blocks are generated online
+- streaming block sample: one independent seed-based training or test block
+- rollout query: one visited joint (episode, n_targets) state generated online from the current precoder nets

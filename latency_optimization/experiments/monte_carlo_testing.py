@@ -4,9 +4,9 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from latency_optimization.core.scenarios import build_experiment_scenario_summary_lines
-from latency_optimization.core.blocklength import validate_n_search_direction, validate_n_search_strategy
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.scenarios import build_experiment_scenario_summary_lines
+from latency_optimization.optimization.blocklength_search import validate_n_search_direction, validate_n_search_strategy
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.results.naming import join_tag_parts
 
 

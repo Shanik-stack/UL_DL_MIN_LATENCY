@@ -2,10 +2,10 @@ import unittest
 
 import torch
 
-from latency_optimization.downlink.config import load_config as load_downlink_config
+from latency_optimization.downlink.configuration.loader import load_config as load_downlink_config
 from latency_optimization.precoders.parameters import complex_parameter
-from latency_optimization.uplink.convergence.solver import optimize_precoder_for_nl
-from latency_optimization.uplink.config import load_config as load_uplink_config
+from latency_optimization.uplink.methods.convergence.optimize_precoder import optimize_precoder_for_nl
+from latency_optimization.uplink.configuration.loader import load_config as load_uplink_config
 
 
 class _QuadraticPrecoderObjective(torch.nn.Module):

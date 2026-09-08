@@ -1,0 +1,31 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Benchmark ZF
+scenario: streaming
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_streaming_smoke.yaml
+config_hash: cc0d739c7f4e
+test_seeds: [9]
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\streaming\benchmark_zf\benchmark_zf_testset1__streaming_smoke__hcc0d739c7f4e
+Files recorded: 4
+Result artifacts: 2
+Plots: 0
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 2
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt

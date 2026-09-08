@@ -8,7 +8,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.runtime import DEVICE
 
 from .models import (

@@ -8,9 +8,9 @@ from typing import Any, Callable
 import numpy as np
 
 
-from latency_optimization.core.blocklength import build_n_search_config, run_n_frontier_search
-from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE
-from latency_optimization.core.validation import require_choice
+from latency_optimization.optimization.blocklength_search import build_n_search_config, run_n_frontier_search
+from latency_optimization.experiments.scenarios import PAYLOAD_MODE, STREAMING_MODE, build_experiment_scenario
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.experiments.cost import format_experiment_cost_lines
 from latency_optimization.experiments.configuration import load_config_document
 from latency_optimization.experiments.determinism import configure_determinism
@@ -19,20 +19,20 @@ from latency_optimization.results.naming import make_method_result_tag
 from latency_optimization.results.paths import build_uplink_convergence_result_dirs
 from latency_optimization.results.persistence import current_local_timestamp
 
-from ..config import load_config
-from ..reporting import (
+from ..configuration.loader import load_config
+from ..results.reporting import (
     _build_uplink_final_test_section_lines,
     _build_uplink_per_user_test_lines,
     build_convergence_result,
 )
-from ..simulation import (
+from ..simulation.operations import (
     apply_training_solution,
     clone_nested_arrays,
     estimate_initial_random_precoder_payload_schedule,
     estimate_initial_random_precoder_streaming_schedule,
 )
-from ..system import UplinkSystem
-from ..uplink_rate_model import build_uplink_rate_covariance, evaluate_uplink_rate
+from ..simulation.system import UplinkSystem
+from ..physics.rate import build_uplink_rate_covariance, evaluate_uplink_rate
 
 
 ArrayC = np.ndarray
@@ -215,7 +215,7 @@ def run_uplink_closed_form_benchmark(
     verbose: bool = True,
     system_params_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run a complete payload experiment with a closed-form uplink beamformer.
+    """Run a complete payload or streaming experiment with a closed-form beamformer.
 
     What: load one deterministic held-out channel, build the requested conventional
     ZF/RZF precoder for each reached user block, evaluate it with the same FBL law,
@@ -238,13 +238,11 @@ def run_uplink_closed_form_benchmark(
         system_params = dict(system_params_override)
     scenario_mode = require_choice(
         sim_cfg.get("experiment_scenario_mode", PAYLOAD_MODE),
-        {PAYLOAD_MODE},
+        {PAYLOAD_MODE, STREAMING_MODE},
         "experiment_scenario_mode",
     )
-    if scenario_mode != PAYLOAD_MODE:
-        raise ValueError(
-            "Uplink benchmark beamformer methods currently support only payload-completion scenarios."
-        )
+    scenario = build_experiment_scenario(system_params, sim_cfg, seed=int(seed))
+    streaming_targets = np.asarray(scenario.get("streaming_bit_targets_by_block", []), dtype=int)
 
     result_tag = make_method_result_tag(
         spec.result_tag_name,
@@ -281,7 +279,7 @@ def run_uplink_closed_form_benchmark(
                 "[UL Benchmark Initial Baseline]",
                 initial_baseline["initial_latency"],
                 seed=int(seed),
-                scenario="payload",
+                scenario=scenario_mode,
                 method=spec.method_key,
             )
         )
@@ -304,7 +302,15 @@ def run_uplink_closed_form_benchmark(
     beamformer_build_calls = 0
     block = 0
 
-    while any(bits > 0 for bits in remaining_bits):
+    while True:
+        if scenario_mode == STREAMING_MODE:
+            if block >= int(scenario["number_of_blocks"]):
+                break
+            requested_bits = [int(v) for v in streaming_targets[:, int(block)]]
+        else:
+            if not any(bits > 0 for bits in remaining_bits):
+                break
+            requested_bits = list(remaining_bits)
         if block >= max_total_blocks:
             raise RuntimeError(
                 f"Uplink benchmark {spec.public_name} hit max_total_blocks={max_total_blocks} "
@@ -317,14 +323,14 @@ def run_uplink_closed_form_benchmark(
             while len(working_F[k]) <= int(block):
                 working_F[k].append(np.array(system.F[k][-1], copy=True))
 
-        active_users = [int(k) for k in range(K) if int(remaining_bits[k]) > 0]
+        active_users = [int(k) for k in range(K) if int(requested_bits[k]) > 0]
         if verbose:
             print(
                 format_log_line(
                     "[UL Benchmark Block]",
                     block=int(block),
                     active_users=int(len(active_users)),
-                    remaining_bits=int(sum(remaining_bits)),
+                    remaining_bits=int(sum(requested_bits)),
                     beamformer=spec.method_key,
                 )
             )
@@ -369,7 +375,7 @@ def run_uplink_closed_form_benchmark(
                 noise_plus_interference_cov,
             ).rate
             B_max = max(int(np.floor(float(T_ref) * float(R_T))), 0)
-            B_used = int(min(int(remaining_bits[user]), B_max))
+            B_used = int(min(int(requested_bits[user]), B_max))
 
             best_n = int(T_ref)
             best_R = float(R_T)
@@ -432,7 +438,8 @@ def run_uplink_closed_form_benchmark(
             R_star[user].append(float(best_R))
             B_used_star[user].append(int(B_used))
             B_kl_star[user].append(int(B_used))
-            remaining_bits[user] = max(0, int(remaining_bits[user]) - int(B_used))
+            if scenario_mode != STREAMING_MODE:
+                remaining_bits[user] = max(0, int(remaining_bits[user]) - int(B_used))
 
             if verbose:
                 print(
@@ -442,7 +449,11 @@ def run_uplink_closed_form_benchmark(
                         block=int(block),
                         chosen_n_kl=int(best_n),
                         served_bits=int(B_used),
-                        remaining_bits=int(remaining_bits[user]),
+                        remaining_bits=(
+                            int(remaining_bits[user])
+                            if scenario_mode != STREAMING_MODE
+                            else 0
+                        ),
                         achieved_rate=float(best_R),
                     )
                 )
@@ -457,8 +468,10 @@ def run_uplink_closed_form_benchmark(
         "B_used_star": B_used_star,
         "B_kl_star": B_kl_star,
         "all_user_block_results_train": all_user_block_results_train,
-        "scenario_mode": PAYLOAD_MODE,
-        "scenario_block_targets": [],
+        "scenario_mode": scenario_mode,
+        "scenario_block_targets": (
+            streaming_targets.tolist() if scenario_mode == STREAMING_MODE else []
+        ),
         "convergence_precoder_update_mode": "closed_form_benchmark",
         "precoder_parameterization": spec.precoder_parameterization,
         "benchmark_beamformer": spec.public_name,
@@ -500,7 +513,7 @@ def run_uplink_closed_form_benchmark(
     result["precoder_parameterization"] = spec.precoder_parameterization
     result["benchmark_beamformer"] = spec.public_name
     result["benchmark_method_details"] = benchmark_data["benchmark_method_details"]
-    result["scenario_mode"] = PAYLOAD_MODE
+    result["scenario_mode"] = scenario_mode
     result["experiment_cost"] = _build_closed_form_experiment_cost(
         core_wall_time_seconds_total=perf_counter() - core_start,
         beamformer_build_calls=beamformer_build_calls,

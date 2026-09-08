@@ -1,0 +1,9 @@
+Experiment scenario summary
+Mode: payload
+Seed: 9
+Termination rule: until_payload_drained
+Per-user total target bits: [1, 1]
+Total target bits: 2
+Monte Carlo sample unit: channel_episode
+Monte Carlo sample kind: payload_channel_episode
+Payload bits per user: [1, 1]

@@ -1,6 +1,6 @@
 import unittest
 
-from latency_optimization.core.scenarios import (
+from latency_optimization.experiments.scenarios import (
     PAYLOAD_MODE,
     STREAMING_MODE,
     build_experiment_scenario,

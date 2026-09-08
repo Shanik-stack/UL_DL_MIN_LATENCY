@@ -1,14 +1,14 @@
 import unittest
 
-from latency_optimization.downlink.config import load_config as load_downlink_config
-from latency_optimization.downlink.monte_carlo.network_operations import (
+from latency_optimization.downlink.configuration.loader import load_config as load_downlink_config
+from latency_optimization.downlink.methods.monte_carlo.precoder_network import (
     _build_training_user_models,
 )
-from latency_optimization.downlink.monte_carlo.rollout import (
+from latency_optimization.downlink.methods.monte_carlo.build_training_rollouts import (
     _collect_downlink_episode_rollout_queries,
 )
-from latency_optimization.uplink.config import load_config as load_uplink_config
-from latency_optimization.uplink.monte_carlo.rollout import (
+from latency_optimization.uplink.configuration.loader import load_config as load_uplink_config
+from latency_optimization.uplink.methods.monte_carlo.build_training_rollouts import (
     _collect_uplink_payload_rollout_queries_for_episode,
 )
 from latency_optimization.uplink.precoders.models import build_user_precoder_net

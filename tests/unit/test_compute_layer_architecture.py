@@ -68,7 +68,7 @@ class ComputeLayerArchitectureTests(unittest.TestCase):
 
     def test_objectives_are_torch_only_and_simulator_independent(self) -> None:
         for link in ("uplink", "downlink"):
-            source = (ROOT / link / "objective.py").read_text(encoding="utf-8")
+            source = (ROOT / link / "objectives" / "precoder.py").read_text(encoding="utf-8")
             self.assertNotIn("import numpy", source)
             self.assertNotIn(".system import", source)
             self.assertNotIn(".cpu().numpy()", source)
@@ -81,9 +81,29 @@ class ComputeLayerArchitectureTests(unittest.TestCase):
 
     def test_both_links_expose_only_the_standard_config_loader(self) -> None:
         for link in ("uplink", "downlink"):
-            source = (ROOT / link / "config.py").read_text(encoding="utf-8")
+            source = (ROOT / link / "configuration" / "loader.py").read_text(encoding="utf-8")
             self.assertIn("def load_config(", source)
             self.assertNotIn("def get_config(", source)
+
+    def test_link_roots_contain_no_mixed_responsibility_modules(self) -> None:
+        for link in ("uplink", "downlink"):
+            root_modules = {path.name for path in (ROOT / link).glob("*.py")}
+            self.assertEqual({"__init__.py"}, root_modules)
+
+    def test_both_links_use_the_same_responsibility_packages(self) -> None:
+        expected = {
+            "benchmarks",
+            "configuration",
+            "methods",
+            "objectives",
+            "precoders",
+            "results",
+            "simulation",
+            "physics",
+        }
+        for link in ("uplink", "downlink"):
+            actual = {path.name for path in (ROOT / link).iterdir() if path.is_dir()}
+            self.assertTrue(expected.issubset(actual), f"{link} package layout is incomplete")
 
     def test_payload_and_streaming_baselines_are_explicit(self) -> None:
         source = "\n".join(
@@ -103,13 +123,13 @@ class ComputeLayerArchitectureTests(unittest.TestCase):
 
     def test_critical_execution_functions_explain_their_role(self) -> None:
         required = {
-            "downlink/block_state.py": {
+            "downlink/simulation/block_state.py": {
                 "expand_precoders_for_plan",
                 "ensure_precoder_block",
                 "user_link_budget",
                 "evaluate_block_candidate",
             },
-            "downlink/system.py": {
+            "downlink/simulation/system.py": {
                 "compose_full_precoder",
                 "project_block_precoders_to_power",
                 "compute_block_rate",
@@ -119,7 +139,7 @@ class ComputeLayerArchitectureTests(unittest.TestCase):
                 "finite_blocklength_from_metric",
                 "finite_blocklength_mimo",
             },
-            "uplink/uplink_rate_model.py": {
+            "uplink/physics/rate.py": {
                 "build_uplink_rate_covariance_torch",
                 "evaluate_uplink_rate_tensor",
             },

@@ -7,7 +7,7 @@ import numpy as np
 
 from latency_optimization.results.persistence import save_json, save_text, write_result_manifest
 
-from ...plotting import (
+from ...results.plotting import (
     plot_interference_before_after_heatmaps,
     plot_interference_heatmaps,
     plot_kkt_residual_history,
@@ -18,7 +18,7 @@ from ...plotting import (
     plot_per_user_schedule_details,
     plot_user_config,
 )
-from ...result_writer import save_test_results_to_txt
+from ...results.persistence import save_test_results_to_txt
 from ..linear_beamforming import run_uplink_closed_form_benchmark
 
 

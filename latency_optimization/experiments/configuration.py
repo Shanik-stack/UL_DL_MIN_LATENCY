@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
-from latency_optimization.core.scenarios import PAYLOAD_MODE, STREAMING_MODE
+from latency_optimization.experiments.scenarios import PAYLOAD_MODE, STREAMING_MODE
 from latency_optimization.project import BENCHMARK_CONFIG_ROOT, EXPERIMENT_CONFIG_ROOT, PROJECT_ROOT
 from latency_optimization.results.naming import build_config_content_hash
 

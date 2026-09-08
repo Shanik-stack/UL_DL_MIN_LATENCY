@@ -8,7 +8,7 @@ import math
 import torch
 import torch.nn as nn
 
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.config_validation import require_choice
 from latency_optimization.runtime import DEVICE
 
 DOWNLINK_PRECODER_NET_SCOPES = {"per_user_nets", "bs_shared_net"}

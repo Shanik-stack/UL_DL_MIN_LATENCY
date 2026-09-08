@@ -1,0 +1,25 @@
+Uplink online vs exhaustive strategy comparison
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_exhaustive_smoke.yaml
+Seed: 9
+
+Online strategy
+  - Per-user final latency (s): [6.6667e-05, 6.6667e-05]
+  - Total latency sum (s): 0.000133333
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [1, 1]
+  - Per-user remaining bits: [0, 0]
+  - User 0 block plan:
+      block 0: action=serve, bits=1, n_kl=1, latency_s=0.000066667, remaining_bits=0
+  - User 1 block plan:
+      block 0: action=serve, bits=1, n_kl=1, latency_s=0.000066667, remaining_bits=0
+
+Exhaustive strategy
+  - Per-user final latency (s): [6.6667e-05, 6.6667e-05]
+  - Total latency sum (s): 0.000133333
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [1, 1]
+  - Per-user remaining bits: [0, 0]
+  - User 0 block plan:
+      block 0: action=serve, bits=1, n_kl=1, latency_s=0.000066667, remaining_bits=0
+  - User 1 block plan:
+      block 0: action=serve, bits=1, n_kl=1, latency_s=0.000066667, remaining_bits=0

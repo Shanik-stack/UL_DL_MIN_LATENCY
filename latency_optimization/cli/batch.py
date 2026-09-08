@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 
 from latency_optimization.project import BATCH_RUN_CONFIG_ROOT, EXPERIMENT_CONFIG_ROOT, PROJECT_ROOT
-from latency_optimization.core.validation import require_bool, require_choice
+from latency_optimization.experiments.config_validation import require_bool, require_choice
 
 METHOD_SPECS: dict[tuple[str, str], dict[str, Any]] = {
     (

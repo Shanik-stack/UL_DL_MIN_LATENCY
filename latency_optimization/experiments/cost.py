@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping, Sequence
 
-from latency_optimization.core.validation import require_choice
+from latency_optimization.experiments.config_validation import require_choice
 
 
 FORWARD_BACKWARD_FLOP_FACTOR = 3.0

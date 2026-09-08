@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from latency_optimization.experiments.channels import with_monte_carlo_sample_snr_by_user
+from latency_optimization.experiments.scenarios import STREAMING_MODE, build_experiment_scenario
 from latency_optimization.results.paths import build_experiment_root
 from latency_optimization.results.persistence import (
     current_local_timestamp,
@@ -18,18 +19,26 @@ from latency_optimization.results.persistence import (
 )
 from latency_optimization.results.naming import make_method_result_tag
 
-from ..config import load_config
-from ..baselines import estimate_random_precoder_payload_latency
-from ..system import DownlinkSystem
+from ..configuration.loader import load_config
+from ..simulation.baselines import estimate_random_precoder_payload_latency, estimate_random_precoder_streaming_latency
+from ..simulation.system import DownlinkSystem
 from .linear_beamforming import build_joint_linear_precoders
 
 
 def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_by_user: list[float], method: str) -> dict:
     params = with_monte_carlo_sample_snr_by_user(system_params, snr_db_by_user)
     system = DownlinkSystem(params, seed=int(seed))
+    scenario = build_experiment_scenario(params, sim_params, seed=int(seed))
+    scenario_mode = str(scenario["mode"])
+    streaming_targets = np.asarray(scenario.get("streaming_bit_targets_by_block", []), dtype=int)
     random_baseline_failure = ""
     try:
-        initial_latency, _, _ = estimate_random_precoder_payload_latency(system, sim_params)
+        if scenario_mode == STREAMING_MODE:
+            initial_latency, _, _ = estimate_random_precoder_streaming_latency(
+                system, sim_params, scenario
+            )
+        else:
+            initial_latency, _, _ = estimate_random_precoder_payload_latency(system, sim_params)
         random_baseline_completed = True
     except RuntimeError as error:
         initial_latency = []
@@ -40,10 +49,16 @@ def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_b
     bit_plan = [[] for _ in range(system.K)]
     max_blocks = int(sim_params["max_total_blocks"])
 
-    for block in range(max_blocks):
-        if not np.any(remaining > 0):
+    blocks_to_run = int(scenario["number_of_blocks"]) if scenario_mode == STREAMING_MODE else max_blocks
+    for block in range(blocks_to_run):
+        if scenario_mode != STREAMING_MODE and not np.any(remaining > 0):
             break
-        active = [k for k in range(system.K) if int(remaining[k]) > 0]
+        requested = (
+            streaming_targets[:, int(block)]
+            if scenario_mode == STREAMING_MODE
+            else remaining
+        )
+        active = [k for k in range(system.K) if int(requested[k]) > 0]
         for k in range(system.K):
             system.ensure_block(k, block)
         beams = build_joint_linear_precoders(system, block, active, method)
@@ -53,9 +68,9 @@ def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_b
         for k in active:
             T_k = int(system.T[k])
             rate_T = float(system.compute_block_rate(k, block, T_k, F_override=snapshot))
-            served = max(0, min(int(remaining[k]), int(np.floor(T_k * rate_T))))
+            served = max(0, min(int(requested[k]), int(np.floor(T_k * rate_T))))
             n_used = T_k
-            if 0 < served >= int(remaining[k]):
+            if 0 < served >= int(requested[k]):
                 for candidate in range(int(sim_params["n_kl_min"]), T_k + 1):
                     rate = float(system.compute_block_rate(k, block, candidate, F_override=snapshot))
                     if float(served) / float(candidate) <= rate:
@@ -63,8 +78,9 @@ def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_b
                         break
             n_plan[k].append(int(n_used))
             bit_plan[k].append(int(served))
-            remaining[k] -= int(served)
-    else:
+            if scenario_mode != STREAMING_MODE:
+                remaining[k] -= int(served)
+    if scenario_mode != STREAMING_MODE and np.any(remaining > 0):
         raise RuntimeError(f"{method.upper()} hit max_total_blocks with remaining bits {remaining.tolist()}.")
 
     final_latency = [float(sum(n_plan[k]) / system.fs[k]) for k in range(system.K)]
@@ -83,6 +99,7 @@ def _evaluate_episode(system_params: dict, sim_params: dict, seed: int, snr_db_b
         "random_baseline_failure": random_baseline_failure,
         "final_asynchronality_seconds": float(sum(pairs)),
         "final_latency_per_user_seconds": final_latency,
+        "scenario_mode": scenario_mode,
         "n_kl_per_user": n_plan, "bits_per_user": bit_plan,
     }
 

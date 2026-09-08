@@ -1,0 +1,12 @@
+Uplink Monte Carlo test dataset summary
+Held-out sample kind: payload_channel_episode
+Held-out sample unit: channel_episode
+Total held-out samples: 1
+Mean final total latency (s): 0.000400
+Std final total latency (s): 0.000000
+Mean latency reduction vs random (%): 0.000000
+Std latency reduction vs random (%): 0.000000
+Mean final asynchronality sum (s): 0.000133
+Std final asynchronality sum (s): 0.000000
+
+Each sample is saved under testing/samples/seed_<seed>/ with its own per-user SNR vector.

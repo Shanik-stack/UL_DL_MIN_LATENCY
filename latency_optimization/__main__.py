@@ -7,10 +7,10 @@ from collections.abc import Sequence
 
 
 RUN_MODULES = {
-    ("uplink", "convergence"): "latency_optimization.uplink.convergence.main",
-    ("uplink", "monte_carlo"): "latency_optimization.uplink.monte_carlo.main",
-    ("downlink", "convergence"): "latency_optimization.downlink.convergence.main",
-    ("downlink", "monte_carlo"): "latency_optimization.downlink.monte_carlo.main",
+    ("uplink", "convergence"): "latency_optimization.uplink.methods.convergence.experiment",
+    ("uplink", "monte_carlo"): "latency_optimization.uplink.methods.monte_carlo.experiment",
+    ("downlink", "convergence"): "latency_optimization.downlink.methods.convergence.experiment",
+    ("downlink", "monte_carlo"): "latency_optimization.downlink.methods.monte_carlo.experiment",
 }
 
 UPLINK_BENCHMARK_MODULES = {

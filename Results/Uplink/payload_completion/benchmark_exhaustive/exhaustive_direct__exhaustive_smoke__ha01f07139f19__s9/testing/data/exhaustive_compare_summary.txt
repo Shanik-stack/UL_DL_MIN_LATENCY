@@ -1,0 +1,57 @@
+Uplink exhaustive payload-completion validation
+Run started (local): 2026-09-08T20:14:09+03:00
+Run completed (local): 2026-09-08T20:14:13+03:00
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_exhaustive_smoke.yaml
+Seed: 9
+Payload bits per user: [1, 1]
+T per user: [2, 2]
+fs per user (channel uses/s): [15000.0, 15000.0]
+Max compared blocks per user: 1
+Allow exhaustive skip actions: False
+Suppressed detailed inner logs: True
+Catalog detail mode: full
+
+Assumptions
+  - Uplink SNR mode only.
+  - Direct-precoder inner solve only.
+  - Unweighted rate reward inside the beam optimizer.
+  - Exact same frozen channel episode is used for both strategies.
+
+Current online rule
+  - Completed all payloads: True
+  - Per-user final latency (s): [6.6667e-05, 6.6667e-05]
+  - Total latency sum (s): 0.000133333
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [1, 1]
+  - Per-user remaining bits: [0, 0]
+
+Exhaustive search
+  - Completed all payloads: True
+  - Per-user final latency (s): [6.6667e-05, 6.6667e-05]
+  - Total latency sum (s): 0.000133333
+  - Final asynchronality sum (s): 0.000000000
+  - Per-user served bits: [1, 1]
+  - Per-user remaining bits: [0, 0]
+  - Unique exact (B,n) solves: 4
+  - Exact pair catalog size: 4
+  - Per-user schedule counts: [2, 2]
+  - Global schedule count: 4
+
+Comparison
+  - Exhaustive latency gain over current online rule: 0.000000000 s
+  - Exhaustive latency gain percentage: 0.0000%
+  - Exhaustive asynchronality gain over current online rule: 0.000000000 s
+
+Best exhaustive allocation combination
+  - Global schedule id: 1
+  - Completed all users: True
+  - Total latency sum (s): 0.000133333
+  - Asynchronality sum (s): 0.000000000
+  - Total remaining bits: 0
+  - Per-user schedule ids: [1, 1]
+  - Per-user latency (s): [6.6667e-05, 6.6667e-05]
+  - Per-user action signatures: ['b0:serve(B=1,n=1)', 'b0:serve(B=1,n=1)']
+
+Interpretation
+  - If exhaustive wins, then the current max-feasible-at-n=T then tail-reduce rule is not globally optimal on this frozen episode.
+  - If both match, this episode does not provide a counterexample against the current rule.

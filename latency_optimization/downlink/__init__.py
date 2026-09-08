@@ -1,5 +1,5 @@
 """Downlink system and optimization methods."""
 
-from .system import DownlinkSystem
+from .simulation.system import DownlinkSystem
 
 __all__ = ["DownlinkSystem"]

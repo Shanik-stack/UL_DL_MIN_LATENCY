@@ -2,9 +2,9 @@ import unittest
 
 import torch
 
-from latency_optimization.downlink.objective import DownlinkBlockContext, DownlinkPrecoderObjective
+from latency_optimization.downlink.objectives.precoder import DownlinkBlockContext, DownlinkPrecoderObjective
 from latency_optimization.runtime import DEVICE
-from latency_optimization.uplink.objective import UplinkPrecoderObjective
+from latency_optimization.uplink.objectives.precoder import UplinkPrecoderObjective
 
 
 class PrecodersObjectiveTests(unittest.TestCase):

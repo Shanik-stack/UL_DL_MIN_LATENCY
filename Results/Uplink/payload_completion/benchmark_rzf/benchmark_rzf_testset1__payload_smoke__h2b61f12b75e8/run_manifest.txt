@@ -1,0 +1,31 @@
+Run manifest
+
+Setup
+link: Uplink
+method: Benchmark RZF
+scenario: payload
+config_path: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_payload_smoke.yaml
+config_hash: 2b61f12b75e8
+test_seeds: [9]
+
+Artifact summary
+Status: complete
+Artifact health: complete
+Result root: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\Results\Uplink\payload_completion\benchmark_rzf\benchmark_rzf_testset1__payload_smoke__h2b61f12b75e8
+Files recorded: 4
+Result artifacts: 2
+Plots: 0
+Empty directories removed: 0
+Zero-byte files: 0
+
+Files by section
+- testing: 2
+
+Files
+[root]
+- run_manifest.json
+- run_manifest.txt
+
+[testing]
+- testing\data\test_dataset_summary.json
+- testing\data\test_dataset_summary.txt

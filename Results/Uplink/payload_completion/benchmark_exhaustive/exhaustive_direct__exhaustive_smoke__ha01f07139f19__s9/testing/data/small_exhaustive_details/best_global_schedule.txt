@@ -1,0 +1,4 @@
+Best uplink exhaustive schedule
+Config: C:\All Codes\Taiwan_Internship\UL_DL_MIN_LATENCY\tests\fixtures\uplink_exhaustive_smoke.yaml
+Seed: 9
+Best schedule: {'global_schedule_id': 1, 'all_completed': True, 'total_latency_sum': 2, 'total_remaining_bits': 0, 'per_user_schedule_ids': [1, 1], 'per_user_latency': [1, 1], 'per_user_remaining_bits': [0, 0], 'per_user_action_signatures': ['b0:serve(B=1,n=1)', 'b0:serve(B=1,n=1)'], 'per_user_B_kl_plans': [[1], [1]], 'per_user_n_kl_plans': [[1], [1]], 'per_user_block_plans': [[{'block': 0, 'served_bits': 1, 'n_kl': 1, 'action_type': 'serve'}], [{'block': 0, 'served_bits': 1, 'n_kl': 1, 'action_type': 'serve'}]], 'per_user_latency_seconds': [6.666666666666667e-05, 6.666666666666667e-05], 'total_latency_sum_seconds': 0.00013333333333333334, 'asynchronality_pairs_seconds': [{'user_i': 0, 'user_j': 1, 'abs_latency_diff': 0.0}], 'asynchronality_sum_seconds': 0.0}

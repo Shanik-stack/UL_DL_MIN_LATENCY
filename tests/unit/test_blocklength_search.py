@@ -1,6 +1,6 @@
 import unittest
 
-from latency_optimization.core.blocklength import build_monte_carlo_n_search_config
+from latency_optimization.optimization.blocklength_search import build_monte_carlo_n_search_config
 
 
 class MonteCarloBlocklengthSearchTests(unittest.TestCase):

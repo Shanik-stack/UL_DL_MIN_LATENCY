@@ -1,110 +1,97 @@
 # Code Organization
 
-All executable source is in `latency_optimization`. Configuration, generated
-channels, results, and documentation sit outside that package. A method never
-imports plots, saved results, or command-line code.
+All executable source is under `latency_optimization`. The package is organized
+around two questions: which communication link is being simulated, and which
+method is being run.
 
 ```text
 latency_optimization/
-  core/            scenario rules, validation, and n-search
-  physics/         finite-blocklength rate laws
-  precoders/       shared complex-parameter and power operations
-  optimization/    convergence diagnostics and stopping rules
-  experiments/     seed, channel, cost, and test-dataset infrastructure
-  results/         shared metrics, plots, names, paths, and persistence
+  __main__.py                 unified CLI dispatch
+  experiments/               configuration, scenarios, channels, seeds, cost
+  optimization/              blocklength search and convergence criteria
+  physics/                    finite-blocklength rate equations
+  precoders/                  shared power, parameters, state, serialization
+  results/                    metrics, paths, plots, and persistence
   uplink/
-    objective.py   `UplinkPrecoderObjective` for one user and block
-    objective_settings.py  uplink objective selection and validation
-    precoders/     MLP models, Torch inference, and checkpoints
-    convergence/   online precoder optimization and allocation
-    monte_carlo/   rollout, trainer, evaluator
-    benchmarks/    ZF, RZF, and exhaustive validation
+    configuration/            config loading and validation
+    simulation/               system state, parameters, and schedule operations
+    physics/                  uplink SNR/SINR covariance and rate evaluation
+    objectives/               differentiable objective and objective settings
+    precoders/                uplink MLP, inference, checkpoints
+    results/                  metrics, reports, persistence, and plots
+    methods/
+      convergence/            online per-channel optimization
+      monte_carlo/            offline training and held-out evaluation
+    benchmarks/               ZF, RZF, exhaustive search
   downlink/
-    objective.py   `DownlinkPrecoderObjective` for one coupled BS block
-    objective_settings.py  downlink objective selection and display names
-    reporting.py   downlink result assembly shared by experiment methods
-    precoders/     MLP models, inference, and checkpoints
-    convergence/   joint BS optimization and allocation
-    monte_carlo/   rollout, trainer, evaluator
-    benchmarks/    ZF and RZF evaluation
+    configuration/            config loading and validation
+    simulation/               system state, block state, and random baselines
+    physics/                  downlink interference-coupled rate evaluation
+    objectives/               coupled-BS objective, settings, and user weights
+    precoders/                downlink MLP, inference, checkpoints, model service
+    results/                  metrics, reports, persistence, and plots
+    methods/
+      convergence/            online per-channel optimization
+      monte_carlo/            offline training and held-out evaluation
+    benchmarks/               ZF and RZF
 ```
 
-## Ownership
+## Method Layout
 
-`physics/rate_law.py` is the only finite-blocklength rate-law registry.
-`physics/finite_blocklength.py` contains one Torch implementation of the rate
-equation. NumPy implementations of optimization or rate equations are not
-allowed.
-`precoders/` owns complex parameter conversion and power projection.
-It also owns framework-neutral model checkpoint and parameter-change handling.
-`uplink/objective.py` and `downlink/objective.py` expose matching
-`nn.Module` objective interfaces with named result dictionaries. The uplink
-objective evaluates one user's independent precoder; the downlink objective
-evaluates all active user slices of the joint BS precoder because their SINRs
-and the BS power constraint are coupled. Configuration parsing and labels do
-not belong in either mathematical objective, and objectives receive Torch
-tensors rather than simulator objects. `convergence/solver.py` improves a beam; `allocation.py` decides
-payload bits and `n_kl`. Monte Carlo `rollout.py` selects visited states,
-`trainer.py` updates network weights, and `evaluator.py` runs held-out
-schedules.
+Every method follows the same navigation convention:
 
-`optimization/stopping.py` owns both stopping modes:
+- `experiment.py`: complete run from configuration to persisted results.
+- `optimize_transmission.py`: convergence block and blocklength procedure.
+- `optimize_payload.py`: payload-completion block loop.
+- `optimize_streaming.py`: fixed-horizon streaming block loop.
+- `optimize_precoder.py`: convergence solve for a fixed blocklength state.
+- `build_training_rollouts.py`: Monte Carlo dataset and visited-state generation.
+- `train_precoder_network.py`: Monte Carlo epoch and optimizer loop.
+- `evaluate_precoder_network.py`: inference-only held-out scheduling.
+- `precoder_network.py`: differentiable network operations used in training.
 
-- `objective_stationarity` uses only relative precoder change.
-- `kkt_residuals` also requires primal, complementarity, and stationarity
-  diagnostics. Streaming configurations select this mode.
-
-Every experiment configuration is strict. Labels such as `payload`,
-`streaming`, `per_user_nets`, and `bs_shared_net` have no aliases.
-Both links expose the same `load_config()` contract, returning system
-parameters, simulation parameters, and run metadata.
-
-## Tensor Boundary
-
-Torch tensors are the canonical representation inside model inference,
-objectives, rate evaluation, candidate search, and gradient optimization.
-Channels loaded from generated datasets are converted when they enter this
-compute layer. Precoder tensors are converted to NumPy only when a completed
-schedule is committed to the current simulator or passed to persistence and
-plotting code. Shared conversion helpers live in `precoders/serialization.py`;
-downlink joint-precoder assembly lives in `downlink/model_service.py`. Model
-and physics modules must not return NumPy arrays.
-
-`results/metrics.py` owns link-independent latency, asynchronality, and
-reference-schedule schemas. `results/plotting.py` owns plot primitives shared
-by uplink and downlink. Method evaluators calculate schedules and diagnostics;
-they do not redefine result metrics or plotting mechanics.
-
-`core/blocklength.py` owns every blocklength-search strategy and the shared
-Monte Carlo training/testing search configuration. Link implementations supply
-candidate evaluations but cannot redefine how candidate values are generated.
+Only files applicable to a method are present. There are no old-path wrappers.
 
 ## Dependency Direction
 
 ```text
-core / physics / precoders
-        -> link system and objective
-        -> convergence solver or Monte Carlo rollout
-        -> allocation, evaluator, runner
-        -> results and plots
+experiments / optimization / physics / precoders
+                      -> link simulation, objective, and precoders
+                      -> method optimization procedure
+                      -> method experiment entry point
+                      -> results
 ```
 
-The uplink and downlink packages do not import each other. Benchmarks may call
-the public online allocation entry point only when comparing against the same
-online scheduling rule.
+Shared packages never import uplink or downlink implementations. Uplink and
+downlink never import each other. Monte Carlo and convergence may share link
+objectives, systems, precoders, and reporting, but must not import each other's
+method internals.
 
-## Extending Safely
+## Tensor Boundary
 
-- Add a rate law in `physics/rate_law.py`, register it there, and select it
-  through `finite_blocklength_rate_law`.
-- Add a downlink network in `downlink/precoders/models.py` and matching
-  inference/checkpoint metadata in that package. Do not duplicate an objective
-  or evaluator.
-- Add a training strategy as a separate Monte Carlo trainer that reuses the
-  existing objective, rollout, evaluator, and result persistence layers.
-- Add a scenario in `core/scenarios.py`; both links then receive the same
-  semantics automatically.
+Torch tensors are canonical inside inference, objectives, rate evaluation, and
+gradient optimization. Conversion to NumPy occurs only when a completed schedule
+is committed to simulator state or passed to reporting. Mathematical objectives
+accept tensors rather than simulator objects.
 
-Run commands and configuration details are in
-[`HOW_TO_RUN_EXPERIMENTS.md`](../HOW_TO_RUN_EXPERIMENTS.md) and
-[`configs/parameter_guides/PARAMETER_GUIDE.md`](../configs/parameter_guides/PARAMETER_GUIDE.md).
+## Changing Behavior
+
+- Convergence scenario dispatch: `<link>/methods/convergence/optimize_transmission.py`.
+- Payload/streaming behavior: `<link>/methods/convergence/optimize_payload.py`
+  or `<link>/methods/convergence/optimize_streaming.py`.
+- Fixed-blocklength gradient solve: `<link>/methods/convergence/optimize_precoder.py`.
+- Monte Carlo state generation: `<link>/methods/monte_carlo/build_training_rollouts.py`.
+- Monte Carlo learning: `<link>/methods/monte_carlo/train_precoder_network.py`.
+- Monte Carlo test scheduling: `<link>/methods/monte_carlo/evaluate_precoder_network.py`.
+- MLP architecture: `<link>/precoders/models.py`.
+- Link configuration: `<link>/configuration/loader.py`.
+- Link simulation state: `<link>/simulation/system.py`.
+- Differentiable objective: `<link>/objectives/precoder.py`.
+- Uplink SNR/SINR construction: `uplink/physics/rate.py`.
+- Shared rate equation: `physics/rate_law.py` or `physics/finite_blocklength.py`.
+- Reporting and plots: `<link>/results/`.
+- Scenario semantics: `experiments/scenarios.py`.
+- Blocklength candidate ordering: `optimization/blocklength_search.py`.
+
+The full call graph is in [OPTIMIZATION_FLOW.md](OPTIMIZATION_FLOW.md).
+Commands are in [HOW_TO_RUN_EXPERIMENTS.md](../HOW_TO_RUN_EXPERIMENTS.md).
